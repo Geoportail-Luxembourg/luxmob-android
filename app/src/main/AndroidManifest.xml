@@ -3,7 +3,6 @@
           package="lu.geoportail.map">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="21" />
 
     <application
             android:allowBackup="true"
