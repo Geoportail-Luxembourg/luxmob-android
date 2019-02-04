@@ -8,6 +8,7 @@ import android.webkit.WebView
 import lu.geoportail.map.backends.IBackend
 import lu.geoportail.map.backends.LocalforageMemoryBackend
 import lu.geoportail.map.backends.LocalforageSqliteBackend
+import org.apache.commons.text.StringEscapeUtils
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -131,7 +132,7 @@ class JsObject {
         val string = obj.toString()
         mainHandler.post {
             Log.e(TAG, "Before receiveFromAndroid('$string')")
-            val escaped = string.replace("\\", "\\\\")
+            val escaped = StringEscapeUtils.escapeEcmaScript(string)
             webview.evaluateJavascript("window.androidWrapper.receiveFromAndroid('$escaped');") {
                     _ -> // do nothing with the returned value
             }
