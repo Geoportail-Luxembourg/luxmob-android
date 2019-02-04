@@ -14,7 +14,7 @@ class MainActivity : Activity() {
      * See https://developers.google.com/web/tools/chrome-devtools/remote-debugging/webviews
      */
     private fun allowWebviewDebugging() {
-        WebView.setWebContentsDebuggingEnabled(true);
+        WebView.setWebContentsDebuggingEnabled(true)
     }
 
     /**
@@ -28,7 +28,7 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true;
         settings.setAppCachePath(appCachePath);
         settings.setAppCacheEnabled(true);
-        view.addJavascriptInterface(JsObject(view), "luxHost")
+        view.addJavascriptInterface(JsObject(view), "ngeoHost")
 
         view.webViewClient = MyWebViewclient()
         view.webChromeClient = WebChromeClient()
