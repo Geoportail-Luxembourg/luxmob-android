@@ -47,7 +47,6 @@ class JsObject {
             return
         }
 
-        val args = action.getJSONArray("args")
         val command = action.getString("command")
         when (command) {
             "getItem" -> getItem(action)
