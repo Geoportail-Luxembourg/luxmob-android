@@ -2,22 +2,22 @@ package lu.geoportail.map
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.support.annotation.Keep
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import lu.geoportail.map.backends.IBackend
-import lu.geoportail.map.backends.LocalforageMemoryBackend
 import lu.geoportail.map.backends.LocalforageSqliteBackend
 import org.apache.commons.text.StringEscapeUtils
 import org.json.JSONArray
 import org.json.JSONObject
 
 
-class JsObject {
+class JsObject(view: WebView) {
 
     private val backend: IBackend
-    private val TAG = "JsObject"
-    private val webview: WebView
+    private val tag = "JsObject"
+    private val webview: WebView = view
     private val mainHandler = Handler()
     private var backendThread: HandlerThread? = null
     private val backendHandler: Handler by lazy {
@@ -27,14 +27,14 @@ class JsObject {
         Handler(thread.looper)
     }
 
-    constructor(view: WebView) {
-        webview = view
+    init {
         backend = LocalforageSqliteBackend(view.context)
     }
 
     @JavascriptInterface
+    @Keep
     fun postMessageToAndroid(action: String) {
-        Log.e(TAG, "postMessageToAndroid $action")
+        Log.e(tag, "postMessageToAndroid $action")
         handleAction(action)
     }
 
@@ -63,7 +63,7 @@ class JsObject {
         val key = args.getString(0)
         backendHandler.post {
             val responseArgs = JSONArray()
-            var value = backend.getItem(key, action)
+            val value = backend.getItem(key, action)
             if (value?.first() == '{') {
                 // If the value is actually a JSON object we parse it
                 // Otherwise we would return an array of string, which is not what is expected
@@ -130,10 +130,10 @@ class JsObject {
     private fun postJsonObjectToWebview(obj: JSONObject) {
         val string = obj.toString()
         mainHandler.post {
-            Log.e(TAG, "Before receiveFromAndroid('$string')")
+            Log.e(tag, "Before receiveFromAndroid('$string')")
             val escaped = StringEscapeUtils.escapeEcmaScript(string)
             webview.evaluateJavascript("window.androidWrapper.receiveFromAndroid('$escaped');") {
-                    _ -> // do nothing with the returned value
+                // do nothing with the returned value
             }
         }
     }

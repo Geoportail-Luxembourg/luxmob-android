@@ -1,0 +1,7 @@
+<lint>
+    <issue id="InvalidPackage">
+        <ignore path="**/commons-text-*.jar"/>
+    </issue>
+    <issue id="SetJavaScriptEnabled" severity="ignore" />
+    <issue id="GoogleAppIndexingWarning" severity="ignore" />
+</lint>

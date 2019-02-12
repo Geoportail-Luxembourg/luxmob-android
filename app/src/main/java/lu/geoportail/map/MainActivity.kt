@@ -1,5 +1,6 @@
 package lu.geoportail.map
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.os.Bundle
 import android.webkit.*
@@ -20,19 +21,20 @@ class MainActivity : Activity() {
     /**
      * See https://developer.android.com/guide/webapps/webview#kotlin
      */
+    @SuppressLint("SetJavaScriptEnabled")
     private fun createAndConfigureWebView() : WebView {
-        val view = WebView(applicationContext);
-        val settings = view.settings;
-        val appCachePath = this.cacheDir.absolutePath;
-        settings.allowFileAccess = true;
-        settings.javaScriptEnabled = true;
-        settings.setAppCachePath(appCachePath);
-        settings.setAppCacheEnabled(true);
+        val view = WebView(applicationContext)
+        val settings = view.settings
+        val appCachePath = this.cacheDir.absolutePath
+        settings.allowFileAccess = true
+        settings.javaScriptEnabled = true
+        settings.setAppCachePath(appCachePath)
+        settings.setAppCacheEnabled(true)
         view.addJavascriptInterface(JsObject(view), "ngeoHost")
 
         view.webViewClient = MyWebViewclient()
         view.webChromeClient = WebChromeClient()
-        return view;
+        return view
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,10 +48,7 @@ class MainActivity : Activity() {
     }
 }
 
-class MyWebViewclient : WebViewClient {
-
-    constructor() : super() {
-    }
+class MyWebViewclient : WebViewClient() {
 
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         request?.requestHeaders?.put("Referer", "http://localhost:5000/hack")

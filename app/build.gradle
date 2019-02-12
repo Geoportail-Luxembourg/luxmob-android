@@ -5,6 +5,9 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
+    lintOptions {
+        lintConfig file("./linting.xml")
+    }
     compileSdkVersion 28
     defaultConfig {
         applicationId "lu.geoportail.map"

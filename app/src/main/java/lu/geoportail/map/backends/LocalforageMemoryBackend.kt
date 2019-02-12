@@ -1,16 +1,18 @@
 package lu.geoportail.map.backends
 
+import android.support.annotation.Keep
 import org.json.JSONObject
 
+@Keep
 class LocalforageMemoryBackend : IBackend {
     val map = HashMap<String, String>()
 
     override fun getItem(key: String, action: JSONObject): String? {
-        return map.get(key)
+        return map[key]
     }
 
     override fun setItem(key: String, base64: String, action: JSONObject) {
-        map.set(key, base64)
+        map[key] = base64
     }
 
     override fun removeItem(key: String, action: JSONObject) {

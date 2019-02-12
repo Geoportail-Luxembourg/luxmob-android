@@ -42,7 +42,7 @@ object OfflineContract {
 
 
 
-class LocalforageSqliteBackend(val context: Context): IBackend {
+class LocalforageSqliteBackend(private val context: Context): IBackend {
 
     private var db: SQLiteDatabase? = null
     private val entry = OfflineContract.OfflineEntry
