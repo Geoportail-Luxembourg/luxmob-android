@@ -7,9 +7,9 @@ import android.webkit.*
 
 
 class MainActivity : Activity() {
-    // val websiteUrl = "https://map.geoportail.lu/?android" // production
-    private val websiteUrl = "https://offline-demo.geoportail.lu/?android" // integration
-    // private val websiteUrl = "http://10.0.2.2:5000/?android" // localhost
+    // val websiteUrl = "https://map.geoportail.lu/?localforage=android" // production
+    private val websiteUrl = "https://offline-demo.geoportail.lu/?localforage=android" // integration
+    // private val websiteUrl = "http://10.0.2.2:5000/?localforage=android&localhost" // localhost
 
     /**
      * See https://developers.google.com/web/tools/chrome-devtools/remote-debugging/webviews
