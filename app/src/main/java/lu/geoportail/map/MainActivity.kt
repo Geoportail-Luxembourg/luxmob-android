@@ -55,7 +55,7 @@ class MainActivity : Activity() {
         view.setWebViewClient(object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, url: String?): Boolean {
                 Log.d("TEST", url)
-                if (url != null && (url.startsWith(websiteUrl))) {
+                if (url != null && Uri.parse(url).host.contains("map.geoportail.lu")) {
                     return false
                 } else {
                     val openURL = Intent(android.content.Intent.ACTION_VIEW)
