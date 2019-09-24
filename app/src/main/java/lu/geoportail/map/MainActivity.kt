@@ -4,14 +4,23 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
+import android.support.v4.content.ContextCompat.startActivity
 import android.webkit.*
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import java.util.jar.Manifest
+import android.support.v4.content.ContextCompat.startActivity
+import android.util.Log
+import android.webkit.WebView
+import android.webkit.WebViewClient
+
+
 
 
 class MainActivity : Activity() {
@@ -43,7 +52,23 @@ class MainActivity : Activity() {
         settings.setAppCacheEnabled(true)
         view.addJavascriptInterface(JsObject(view), "ngeoHost")
 
+        view.setWebViewClient(object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, url: String?): Boolean {
+                Log.d("TEST", url)
+                if (url != null && (url.startsWith(websiteUrl))) {
+                    return false
+                } else {
+                    val openURL = Intent(android.content.Intent.ACTION_VIEW)
+                    openURL.data = Uri.parse(url)
+                    startActivity(openURL)
+                    return true
+                }
+            }
+        })
+
         settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+        settings.setDomStorageEnabled(true);
+        //settings.setDatabaseEnabled(true);
         settings.setGeolocationEnabled(true)
 
         view.setWebChromeClient(object : WebChromeClient() {
@@ -117,12 +142,14 @@ class MainActivity : Activity() {
         val view = createAndConfigureWebView()
         setContentView(view)
 
+
+
         view.loadUrl(websiteUrl)
     }
+
 }
 
 class MyWebViewclient : WebViewClient() {
-
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         request?.requestHeaders?.put("Referer", "http://localhost:5000/hack")
         return super.shouldInterceptRequest(view, request)
