@@ -37,6 +37,7 @@ class MainActivity : Activity() {
         val view = WebView(applicationContext)
         val settings = view.settings
         val appCachePath = this.cacheDir.absolutePath
+        settings.domStorageEnabled = true
         settings.allowFileAccess = true
         settings.javaScriptEnabled = true
         settings.setAppCachePath(appCachePath)
