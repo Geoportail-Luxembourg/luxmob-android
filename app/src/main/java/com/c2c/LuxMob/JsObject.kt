@@ -1,4 +1,4 @@
-package lu.geoportail.map
+package com.c2c.map
 
 import android.os.Handler
 import android.os.HandlerThread
@@ -6,8 +6,8 @@ import android.support.annotation.Keep
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import lu.geoportail.map.backends.IBackend
-import lu.geoportail.map.backends.LocalforageSqliteBackend
+import com.c2c.map.backends.IBackend
+import com.c2c.map.backends.LocalforageSqliteBackend
 import org.apache.commons.text.StringEscapeUtils
 import org.json.JSONArray
 import org.json.JSONObject

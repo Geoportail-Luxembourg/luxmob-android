@@ -1,4 +1,4 @@
-package lu.geoportail.map.backends
+package com.c2c.map.backends
 
 import android.support.annotation.Keep
 import org.json.JSONObject

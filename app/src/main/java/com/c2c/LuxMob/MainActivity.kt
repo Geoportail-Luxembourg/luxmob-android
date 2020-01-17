@@ -1,4 +1,4 @@
-package lu.geoportail.map
+package com.c2c.map
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -10,17 +10,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
-import android.support.v4.content.ContextCompat.startActivity
 import android.webkit.*
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
-import java.util.jar.Manifest
-import android.support.v4.content.ContextCompat.startActivity
 import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
-
-
+import lu.geoportail.map.R
 
 
 class MainActivity : Activity() {
@@ -50,6 +46,8 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.setAppCachePath(appCachePath)
         settings.setAppCacheEnabled(true)
+        settings.allowFileAccessFromFileURLs = true
+        settings.allowUniversalAccessFromFileURLs = true
         view.addJavascriptInterface(JsObject(view), "ngeoHost")
 
         view.setWebViewClient(object : WebViewClient() {
