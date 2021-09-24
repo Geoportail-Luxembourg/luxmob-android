@@ -16,7 +16,7 @@ import java.util.jar.Manifest
 
 class MainActivity : Activity() {
     // val websiteUrl = "https://map.geoportail.lu/?localforage=android" // production
-    private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes" // integration
+    private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8765/static?filename=&embeddedserverprotocol=http&version=3" // integration
     // private val websiteUrl = "http://10.0.2.2:5000/?localforage=android&localhost" // localhost
 
     private val MY_PERMISSIONS_REQUEST_LOCATION = 1
