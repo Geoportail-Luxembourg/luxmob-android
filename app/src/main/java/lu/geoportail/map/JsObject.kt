@@ -2,7 +2,7 @@ package lu.geoportail.map
 
 import android.os.Handler
 import android.os.HandlerThread
-import android.support.annotation.Keep
+import androidx.annotation.Keep
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
