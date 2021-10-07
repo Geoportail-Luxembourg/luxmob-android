@@ -90,7 +90,6 @@ class LuxTileServer (context:Context, resources:Resources) {
             val inputStream: java.io.InputStream = resources.openRawResource(
                 context.getResources().getIdentifier(resourceName, "raw", packageName)
             )
-            //response.send("Hello!!! " + resourceName + "\n")
             val buf: ByteArray = ByteArray(1024)
             val bufL: ByteBufferList = ByteBufferList()
             var len: Int
@@ -135,11 +134,16 @@ class LuxTileServer (context:Context, resources:Resources) {
             if (!curs?.isAfterLast()!!) {
                 // val bufL: ByteBufferList = ByteBufferList(curs.getBlob(0))
                 val buf = curs.getBlob(0)
+
                 response.setContentType("application/x-protobuf")
                 response.headers.add("Access-Control-Allow-Origin","*")
                 response.headers.add("Content-Encoding", "gzip")
                 response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
                 // response.write(bufL)
+            }
+            else {
+                response.code(404)
+                response.send("")
             }
         }
 }
