@@ -11,12 +11,14 @@ import androidx.core.content.ContextCompat
 import android.webkit.*
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
+import java.io.File
+import java.nio.file.Files
 import java.util.jar.Manifest
 
 
 class MainActivity : Activity() {
     // val websiteUrl = "https://map.geoportail.lu/?localforage=android" // production
-    private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8765/static?filename=&embeddedserverprotocol=http&version=3" // integration
+    private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:5001/static&embeddedserverprotocol=http&version=3"
     // private val websiteUrl = "http://10.0.2.2:5000/?localforage=android&localhost" // localhost
 
     private val MY_PERMISSIONS_REQUEST_LOCATION = 1
@@ -117,6 +119,33 @@ class MainActivity : Activity() {
         allowWebviewDebugging()
         val view = createAndConfigureWebView()
         setContentView(view)
+
+        val context = getApplicationContext()
+        val packageName = context.getPackageName()
+        val directory: File = File(this.getFilesDir().toString() + File.separator.toString() + "mbtiles")
+        if (!directory.exists()) {
+            Files.createDirectories(directory.toPath())
+        }
+        val file: File = File(this.getFilesDir().toString() + File.separator.toString() + "mbtiles/omt_geoportail_lu.mbtiles")
+        try {
+                val inputStream: java.io.InputStream = resources.openRawResource(
+                    context.getResources().getIdentifier("omt_geoportail_lu", "raw", packageName)
+                )
+                val fileOutputStream: java.io.FileOutputStream = java.io.FileOutputStream(file)
+                val buf: ByteArray = ByteArray(1024)
+                var len: Int
+                while (inputStream.read(buf).also { len = it } > 0) {
+                    fileOutputStream.write(buf, 0, len)
+                }
+                fileOutputStream.close()
+                inputStream.close()
+            } catch (e1: java.io.IOException) {
+                print("hello")
+            }
+
+
+        val srv = LuxTileServer(context, resources)
+        srv.start(this.getFilesDir().toString())
 
         view.loadUrl(websiteUrl)
     }
