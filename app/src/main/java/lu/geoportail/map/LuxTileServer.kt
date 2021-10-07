@@ -10,7 +10,9 @@ import com.koushikdutta.async.http.server.HttpServerRequestCallback
 import com.koushikdutta.async.http.server.AsyncHttpServerRequest
 import com.koushikdutta.async.http.server.AsyncHttpServerResponse
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.util.ArrayList
 
 class LuxTileServer (context:Context, resources:Resources) {
@@ -30,15 +32,38 @@ class LuxTileServer (context:Context, resources:Resources) {
     val context : Context = context
     val resources : Resources = resources
     val packageName = context.getPackageName()
-    var rootDir : String = ""
 
     fun copyResToFile(resourceName:String, fileName:String) {
+        val file: File = File(fileName)
+        if (file.exists()) {
+            return
+        }
+        val directory: File = File(fileName.substringBeforeLast("/"))
+        if (!directory.exists()) {
+            Files.createDirectories(directory.toPath())
+        }
+        try {
+            val inputStream: java.io.InputStream = resources.openRawResource(
+                context.getResources().getIdentifier(resourceName, "raw", packageName)
+            )
+            val fileOutputStream: java.io.FileOutputStream = java.io.FileOutputStream(file)
+            val buf: ByteArray = ByteArray(1024)
+            var len: Int
+            while (inputStream.read(buf).also { len = it } > 0) {
+                fileOutputStream.write(buf, 0, len)
+            }
+            fileOutputStream.close()
+            inputStream.close()
+        } catch (e1: java.io.IOException) {
+            print("hello")
+        }
 
     }
 
-    fun start(rootDir: String) {
+    fun start(mbtileFile: String) {
+        copyResToFile("omt_geoportail_lu", mbtileFile)
+
         val server = AsyncHttpServer()
-        val _sockets: List<WebSocket> = ArrayList()
         server["/", HttpServerRequestCallback { request, response -> response.send("Hello!!!") }]
         server.get("/hello", HttpServerRequestCallback { request, response -> response.send("Hello!!!" + request.toString()) })
         server.get("/mbtiles", this.getMbTile)
@@ -48,11 +73,10 @@ class LuxTileServer (context:Context, resources:Resources) {
         for ((key, value) in staticsMap) {
             reverseStaticsMap.put(value, key)
         }
-        this.rootDir = rootDir
-        this.db = SQLiteDatabase.openDatabase(this.rootDir + "/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
-        // listen on port 5000
+        this.db = SQLiteDatabase.openDatabase(mbtileFile, null, SQLiteDatabase.OPEN_READONLY)
+        // listen on port 5001
         server.listen(5001)
-        // browsing http://localhost:5000 will return Hello!!!
+        // browsing http://localhost:5001 will return Hello!!!
     }
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->

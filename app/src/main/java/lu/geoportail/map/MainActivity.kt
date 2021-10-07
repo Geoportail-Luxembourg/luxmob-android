@@ -11,9 +11,6 @@ import androidx.core.content.ContextCompat
 import android.webkit.*
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
-import java.io.File
-import java.nio.file.Files
-import java.util.jar.Manifest
 
 
 class MainActivity : Activity() {
@@ -121,31 +118,9 @@ class MainActivity : Activity() {
         setContentView(view)
 
         val context = getApplicationContext()
-        val packageName = context.getPackageName()
-        val directory: File = File(this.getFilesDir().toString() + File.separator.toString() + "mbtiles")
-        if (!directory.exists()) {
-            Files.createDirectories(directory.toPath())
-        }
-        val file: File = File(this.getFilesDir().toString() + File.separator.toString() + "mbtiles/omt_geoportail_lu.mbtiles")
-        try {
-                val inputStream: java.io.InputStream = resources.openRawResource(
-                    context.getResources().getIdentifier("omt_geoportail_lu", "raw", packageName)
-                )
-                val fileOutputStream: java.io.FileOutputStream = java.io.FileOutputStream(file)
-                val buf: ByteArray = ByteArray(1024)
-                var len: Int
-                while (inputStream.read(buf).also { len = it } > 0) {
-                    fileOutputStream.write(buf, 0, len)
-                }
-                fileOutputStream.close()
-                inputStream.close()
-            } catch (e1: java.io.IOException) {
-                print("hello")
-            }
-
 
         val srv = LuxTileServer(context, resources)
-        srv.start(this.getFilesDir().toString())
+        srv.start(this.getFilesDir().toString() + "/mbtiles/omt_geoportail_lu.mbtiles")
 
         view.loadUrl(websiteUrl)
     }
