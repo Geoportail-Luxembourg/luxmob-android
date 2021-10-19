@@ -4,10 +4,10 @@
   "sources": {
     "geoportail.lu_layers": {
       "type": "vector",
-      "url": "http://127.0.0.1:5001/static/data/omt-geoportail-lu.json"
+      "url": "http://127.0.0.1:8766/static/data/omt-geoportail-lu.json"
     }
   },
-  "glyphs": "http://127.0.0.1:5001/static/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",

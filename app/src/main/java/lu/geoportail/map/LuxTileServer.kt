@@ -75,7 +75,7 @@ class LuxTileServer (context:Context, resources:Resources) {
         }
         this.db = SQLiteDatabase.openDatabase(mbtileFile, null, SQLiteDatabase.OPEN_READONLY)
         // listen on port 5001
-        server.listen(5001)
+        server.listen(8766)
         // browsing http://localhost:5001 will return Hello!!!
     }
     private val getStaticFile =
