@@ -28,7 +28,8 @@ class LuxTileServer (context:Context, resources:Resources) {
         "fonts_noto_sans_0_255" to "static/fonts/NotoSansBold/0-255.pbf",
         "fonts_noto_sans_256_511" to "static/fonts/NotoSansBold/256-511.pbf",
         "fonts_noto_regular_0_255" to "static/fonts/NotoSansRegular/0-255.pbf",
-        "fonts_noto_regular_256_511" to "static/fonts/NotoSansRegular/256-511.pbf"
+        "fonts_noto_regular_256_511" to "static/fonts/NotoSansRegular/256-511.pbf",
+        "fonts_noto_regular_8192_8447" to "static/fonts/NotoSansRegular/8192-8447.pbf"
     )
     val reverseStaticsMap = HashMap<String, String>()
     val context : Context = context
