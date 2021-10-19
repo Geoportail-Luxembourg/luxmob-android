@@ -16,10 +16,12 @@ import java.nio.file.Files
 import java.util.ArrayList
 
 class LuxTileServer (context:Context, resources:Resources) {
-    private var db: SQLiteDatabase? = null
+    private var db: Map<String, SQLiteDatabase>? = null
     val staticsMap = mapOf(
         "omt_geoportail_lu" to "mbtiles/omt_geoportail_lu.mbtiles",
+        "omt_topo_geoportail_lu" to "mbtiles/omt_topo_geoportail_lu.mbtiles",
         "data_omt_geoportail_lu" to "static/data/omt-geoportail-lu.json",
+        "data_omt_topo_geoportail_lu" to "static/data/omt-topo-geoportail-lu.json",
         "roadmap_style" to "static/styles/roadmap/style.json",
         "topomap_style" to "static/styles/topomap/style.json",
         "topomap_gray_style" to "static/styles/topomap_gray/style.json",
@@ -60,8 +62,9 @@ class LuxTileServer (context:Context, resources:Resources) {
 
     }
 
-    fun start(mbtileFile: String) {
-        copyResToFile("omt_geoportail_lu", mbtileFile)
+    fun start(filePath: String) {
+        copyResToFile("omt_geoportail_lu", filePath + "/mbtiles/omt_geoportail_lu.mbtiles")
+        copyResToFile("omt_topo_geoportail_lu", filePath + "/mbtiles/omt_topo_geoportail_lu.mbtiles")
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { request, response -> response.send("Hello!!!") }]
@@ -73,7 +76,10 @@ class LuxTileServer (context:Context, resources:Resources) {
         for ((key, value) in staticsMap) {
             reverseStaticsMap.put(value, key)
         }
-        this.db = SQLiteDatabase.openDatabase(mbtileFile, null, SQLiteDatabase.OPEN_READONLY)
+        this.db = mapOf(
+            "road" to SQLiteDatabase.openDatabase(filePath + "/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
+            "topo" to SQLiteDatabase.openDatabase(filePath + "/mbtiles/omt_topo_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
+        )
         // listen on port 5001
         server.listen(8766)
         // browsing http://localhost:5001 will return Hello!!!
@@ -108,6 +114,9 @@ class LuxTileServer (context:Context, resources:Resources) {
     private val getMbTile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
 
+            var layer = "road"
+            if (request.query.getString("layer") == "topo")
+                layer = "topo"
             val z: Int = request.query.getString("z").toInt()
             val x: Int = request.query.getString("x").toInt()
             var y: Int = request.query.getString("y").toInt()
@@ -120,7 +129,7 @@ class LuxTileServer (context:Context, resources:Resources) {
                 Math.abs(y)
             }
 
-            var curs = this.db?.query(
+            var curs = this.db?.get(layer)?.query(
                 "tiles",
                 Array<String>(1) { i -> "tile_data" },
                 "zoom_level = " + z + " AND tile_column = " + x + " AND tile_row = " + y,

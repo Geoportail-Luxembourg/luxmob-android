@@ -120,7 +120,7 @@ class MainActivity : Activity() {
         val context = getApplicationContext()
 
         val srv = LuxTileServer(context, resources)
-        srv.start(this.getFilesDir().toString() + "/mbtiles/omt_geoportail_lu.mbtiles")
+        srv.start(this.getFilesDir().toString())
 
         view.loadUrl(websiteUrl)
     }
