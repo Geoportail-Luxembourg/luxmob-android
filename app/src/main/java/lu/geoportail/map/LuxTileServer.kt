@@ -2,22 +2,23 @@ package lu.geoportail.map
 
 import android.content.Context
 import android.content.res.Resources
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import com.koushikdutta.async.ByteBufferList
-import com.koushikdutta.async.http.WebSocket
 import com.koushikdutta.async.http.server.AsyncHttpServer
 import com.koushikdutta.async.http.server.HttpServerRequestCallback
 import com.koushikdutta.async.http.server.AsyncHttpServerRequest
 import com.koushikdutta.async.http.server.AsyncHttpServerResponse
 import java.io.ByteArrayInputStream
 import java.io.File
-import java.nio.ByteBuffer
+import java.io.FileOutputStream
 import java.nio.file.Files
-import java.util.ArrayList
+import kotlin.math.abs
+import kotlin.math.pow
 
-class LuxTileServer (context:Context, resources:Resources) {
-    private var db: Map<String, SQLiteDatabase>? = null
-    val staticsMap = mapOf(
+class LuxTileServer (private val context: Context, private val resources: Resources) {
+    private lateinit var db: Map<String, SQLiteDatabase>
+    private val staticsMap = mapOf(
         "omt_geoportail_lu" to "mbtiles/omt_geoportail_lu.mbtiles",
         "omt_topo_geoportail_lu" to "mbtiles/omt_topo_geoportail_lu.mbtiles",
         "data_omt_geoportail_lu" to "static/data/omt-geoportail-lu.json",
@@ -31,129 +32,93 @@ class LuxTileServer (context:Context, resources:Resources) {
         "fonts_noto_regular_256_511" to "static/fonts/NotoSansRegular/256-511.pbf",
         "fonts_noto_regular_8192_8447" to "static/fonts/NotoSansRegular/8192-8447.pbf"
     )
-    val reverseStaticsMap = HashMap<String, String>()
-    val context : Context = context
-    val resources : Resources = resources
-    val packageName = context.getPackageName()
+    private val reverseStaticsMap = HashMap<String, String>()
+    private val packageName = context.packageName
 
-    fun copyResToFile(resourceName:String, fileName:String) {
-        val file: File = File(fileName)
-        if (file.exists()) {
-            return
-        }
-        val directory: File = File(fileName.substringBeforeLast("/"))
-        if (!directory.exists()) {
-            Files.createDirectories(directory.toPath())
-        }
-        try {
-            val inputStream: java.io.InputStream = resources.openRawResource(
-                context.getResources().getIdentifier(resourceName, "raw", packageName)
-            )
-            val fileOutputStream: java.io.FileOutputStream = java.io.FileOutputStream(file)
-            val buf: ByteArray = ByteArray(1024)
-            var len: Int
-            while (inputStream.read(buf).also { len = it } > 0) {
-                fileOutputStream.write(buf, 0, len)
-            }
-            fileOutputStream.close()
-            inputStream.close()
-        } catch (e1: java.io.IOException) {
-            print("hello")
+    private fun copyResToFile(resourceName: String, fileName: File) {
+        when {
+           fileName.exists() -> return
+           !fileName.parentFile.exists() -> Files.createDirectory(fileName.parentFile.toPath())
         }
 
+        val sourceFileBytes = resources.openRawResource(
+            context.resources.getIdentifier(resourceName, "raw", packageName)
+        ).readBytes()
+        FileOutputStream(fileName).use {
+            it.write(sourceFileBytes)
+        }
     }
 
-    fun start(filePath: String) {
-        copyResToFile("omt_geoportail_lu", filePath + "/mbtiles/omt_geoportail_lu.mbtiles")
-        copyResToFile("omt_topo_geoportail_lu", filePath + "/mbtiles/omt_topo_geoportail_lu.mbtiles")
+    fun start(filePath: File) {
+        copyResToFile("omt_geoportail_lu", File(filePath,"mbtiles/omt_geoportail_lu.mbtiles"))
+        copyResToFile("omt_topo_geoportail_lu", File(filePath, "mbtiles/omt_topo_geoportail_lu.mbtiles"))
 
         val server = AsyncHttpServer()
-        server["/", HttpServerRequestCallback { request, response -> response.send("Hello!!!") }]
-        server.get("/hello", HttpServerRequestCallback { request, response -> response.send("Hello!!!" + request.toString()) })
-        server.get("/mbtiles", this.getMbTile)
-        server.get("/static/.*", this.getStaticFile)
+        server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
+        server.get("/hello") { request, response -> response.send("Hello!!!$request") }
+        server.get("/mbtiles", getMbTile)
+        server.get("/static/.*", getStaticFile)
 
-        // val reverseStaticsMap = HashMap<String, String>()
         for ((key, value) in staticsMap) {
-            reverseStaticsMap.put(value, key)
+            reverseStaticsMap[value] = key
         }
         this.db = mapOf(
-            "road" to SQLiteDatabase.openDatabase(filePath + "/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
-            "topo" to SQLiteDatabase.openDatabase(filePath + "/mbtiles/omt_topo_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
+            "road" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
+            "topo" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_topo_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
         )
-        // listen on port 5001
+        // listen on port 8766
         server.listen(8766)
         // browsing http://localhost:5001 will return Hello!!!
     }
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             val resourceName = reverseStaticsMap[request.path.substring(1)]
-            if (resourceName == null) {
-                response.code(404)
-                response.send("")
-                return@HttpServerRequestCallback
-            }
-            response.headers.add("Access-Control-Allow-Origin","*")
-            val inputStream: java.io.InputStream = resources.openRawResource(
-                context.getResources().getIdentifier(resourceName, "raw", packageName)
-            )
-            val buf: ByteArray = ByteArray(1024)
-            val bufL: ByteBufferList = ByteBufferList()
-            var len: Int
-            response.headers.add("Content-Length", inputStream.available().toString())
-            while (inputStream.read(buf).also { len = it } > 0) {
-                //response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
-                bufL.addFirst(ByteBuffer.wrap(buf, 0, len))
-                response.write(bufL)
-            }
-            response.end()
-            inputStream.close()
-
-            //response.sendFile(inputStream)
+                if (resourceName == null) {
+                    response.code(404)
+                    response.send("")
+                    return@HttpServerRequestCallback
+                }
+                response.headers.add("Access-Control-Allow-Origin","*")
+                val resourceBytes = resources.openRawResource(
+                    context.resources.getIdentifier(resourceName, "raw", packageName)
+                ).readBytes()
+                response.headers.add("Content-Length", resourceBytes.size.toString())
+                response.write(ByteBufferList(resourceBytes))
         }
 
     private val getMbTile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-
             var layer = "road"
-            if (request.query.getString("layer") == "topo")
-                layer = "topo"
+            if (request.query.getString("layer") == "topo") layer = "topo"
             val z: Int = request.query.getString("z").toInt()
             val x: Int = request.query.getString("x").toInt()
             var y: Int = request.query.getString("y").toInt()
 
             // MBTiles by default use TMS for the tiles. Most mapping apps use slippy maps: XYZ schema.
             // We need to handle both.
-            y = if (y > 0) {
-                Math.pow(2.0, z.toDouble()).toInt() - Math.abs(y) - 1
-            } else {
-                Math.abs(y)
-            }
+            y = (if (y > 0) 2.0.pow(z.toDouble()).toInt() - abs(y) - 1 else abs(y))
 
-            var curs = this.db?.get(layer)?.query(
+            val curs = db[layer]?.query(
                 "tiles",
-                Array<String>(1) { i -> "tile_data" },
-                "zoom_level = " + z + " AND tile_column = " + x + " AND tile_row = " + y,
+                Array(1) { _ -> "tile_data" },
+                "zoom_level = $z AND tile_column = $x AND tile_row = $y",
                 null,
                 null,
                 null,
                 null
             )
-
-            curs?.moveToFirst()
-            if (!curs?.isAfterLast()!!) {
-                // val bufL: ByteBufferList = ByteBufferList(curs.getBlob(0))
-                val buf = curs.getBlob(0)
-
-                response.setContentType("application/x-protobuf")
-                response.headers.add("Access-Control-Allow-Origin","*")
-                response.headers.add("Content-Encoding", "gzip")
-                response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
-                // response.write(bufL)
+            if (curs is Cursor) {
+                curs.moveToFirst()
+                if (!curs.isAfterLast) {
+                    val buf = curs.getBlob(0)
+                    response.setContentType("application/x-protobuf")
+                    response.headers.add("Access-Control-Allow-Origin","*")
+                    response.headers.add("Content-Encoding", "gzip")
+                    response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
+                    return@HttpServerRequestCallback
+                }
             }
-            else {
-                response.code(404)
-                response.send("")
-            }
+            response.code(404)
+            response.send("")
         }
 }
