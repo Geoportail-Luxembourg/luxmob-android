@@ -1,6 +1,6 @@
 package lu.geoportail.map.backends
 
-import android.support.annotation.Keep
+import androidx.annotation.Keep
 import org.json.JSONObject
 
 @Keep
