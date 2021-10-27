@@ -3,6 +3,7 @@ package lu.geoportail.map
 import android.content.Context
 import android.content.res.Resources
 import android.database.Cursor
+import android.database.sqlite.SQLiteBlobTooBigException
 import android.database.sqlite.SQLiteDatabase
 import com.koushikdutta.async.ByteBufferList
 import com.koushikdutta.async.http.server.AsyncHttpServer
@@ -94,6 +95,8 @@ class LuxTileServer (private val context: Context, private val resources: Resour
             val x: Int = request.query.getString("x").toInt()
             var y: Int = request.query.getString("y").toInt()
 
+            response.headers.add("Access-Control-Allow-Origin","*")
+
             // MBTiles by default use TMS for the tiles. Most mapping apps use slippy maps: XYZ schema.
             // We need to handle both.
             y = (if (y > 0) 2.0.pow(z.toDouble()).toInt() - abs(y) - 1 else abs(y))
@@ -108,11 +111,39 @@ class LuxTileServer (private val context: Context, private val resources: Resour
                 null
             )
             if (curs is Cursor) {
-                curs.moveToFirst()
-                if (!curs.isAfterLast) {
+                try {
+                    curs.moveToFirst()
+                    if (curs.isAfterLast) {
+                        // return 404 if cursor contains no results
+                        response.code(404)
+                        response.send("")
+                        return@HttpServerRequestCallback
+                    }
                     val buf = curs.getBlob(0)
                     response.setContentType("application/x-protobuf")
-                    response.headers.add("Access-Control-Allow-Origin","*")
+                    response.headers.add("Content-Encoding", "gzip")
+                    response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
+                    return@HttpServerRequestCallback
+                }
+                catch (e: SQLiteBlobTooBigException) {
+                    val curs = db[layer]?.rawQuery(
+                        "select length(tile_data) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
+                        null
+                    )
+                    curs?.moveToFirst()
+                    // query sqlite DB by 1MB chunks because SQLiteCursor is limited to 2MB
+                    // in the current DB, this case only occurs for one tile (x=264&y=174&z=9&layer=topo)
+                    val ll = (if (curs != null) curs.getInt(0) else 0)
+                    val buf: ByteArray = ByteArray(ll)
+                    for (i in 0..ll.div(1000*1000)) {
+                        val curs = db[layer]?.rawQuery(
+                            "select substr(tile_data, ${1 + i*1000*1000}, ${(i+1)*1000*1000}) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
+                            null
+                        )
+                        curs?.moveToFirst()
+                        curs?.getBlob(0)?.copyInto(buf, i*1000*1000)
+                    }
+                    response.setContentType("application/x-protobuf")
                     response.headers.add("Content-Encoding", "gzip")
                     response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
                     return@HttpServerRequestCallback
