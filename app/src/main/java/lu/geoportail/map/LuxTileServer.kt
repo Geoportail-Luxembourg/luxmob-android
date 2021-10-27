@@ -73,17 +73,17 @@ class LuxTileServer (private val context: Context, private val resources: Resour
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             val resourceName = reverseStaticsMap[request.path.substring(1)]
-                if (resourceName == null) {
-                    response.code(404)
-                    response.send("")
-                    return@HttpServerRequestCallback
-                }
-                response.headers.add("Access-Control-Allow-Origin","*")
-                val resourceBytes = resources.openRawResource(
-                    context.resources.getIdentifier(resourceName, "raw", packageName)
-                ).readBytes()
-                response.headers.add("Content-Length", resourceBytes.size.toString())
-                response.write(ByteBufferList(resourceBytes))
+            if (resourceName == null) {
+                response.code(404)
+                response.send("")
+                return@HttpServerRequestCallback
+            }
+            response.headers.add("Access-Control-Allow-Origin","*")
+            val resourceBytes = resources.openRawResource(
+                context.resources.getIdentifier(resourceName, "raw", packageName)
+            ).readBytes()
+            response.headers.add("Content-Length", resourceBytes.size.toString())
+            response.write(ByteBufferList(resourceBytes))
         }
 
     private val getMbTile =
