@@ -36,10 +36,10 @@ class LuxTileServer (private val context: Context, private val resources: Resour
     private val packageName = context.packageName
 
     private fun copyResToFile(resourceName: String, fileName: File) {
-        when {
-           fileName.exists() -> return
-           !fileName.parentFile.exists() -> Files.createDirectory(fileName.parentFile.toPath())
-        }
+
+        if (fileName.exists()) return
+
+        if(!fileName.parentFile.exists()) Files.createDirectory(fileName.parentFile.toPath())
 
         val sourceFileBytes = resources.openRawResource(
             context.resources.getIdentifier(resourceName, "raw", packageName)
