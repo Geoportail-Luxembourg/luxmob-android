@@ -16,8 +16,16 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import kotlin.math.abs
 import kotlin.math.pow
+import android.content.res.AssetManager
+import android.util.Log
+import java.io.IOException
 
-class LuxTileServer (private val context: Context, private val resources: Resources) {
+
+class LuxTileServer(
+    private val context: Context,
+    private val resources: Resources,
+    private val assets: AssetManager
+) {
     private lateinit var db: Map<String, SQLiteDatabase>
     private val staticsMap = mapOf(
         "omt_geoportail_lu" to "mbtiles/omt_geoportail_lu.mbtiles",
@@ -36,23 +44,30 @@ class LuxTileServer (private val context: Context, private val resources: Resour
     private val reverseStaticsMap = HashMap<String, String>()
     private val packageName = context.packageName
 
-    private fun copyResToFile(resourceName: String, fileName: File) {
+    private fun copyAssets(assetPath: String, toPathRoot: File) {
+        val assetManager: AssetManager = this.assets
+        var files: Array<String>? = null
+        try {
+            files = assetManager.list(assetPath)
+        } catch (e: IOException) {
+            Log.e("tag", "Failed to get asset file list.", e)
+        }
+        if(!toPathRoot.exists()) Files.createDirectory(toPathRoot.toPath())
+        if (files != null) for (filename in files) {
+            val file = File(toPathRoot, filename)
+            if (file.exists()) continue
 
-        if (fileName.exists()) return
-
-        if(!fileName.parentFile.exists()) Files.createDirectory(fileName.parentFile.toPath())
-
-        val sourceFileBytes = resources.openRawResource(
-            context.resources.getIdentifier(resourceName, "raw", packageName)
-        ).readBytes()
-        FileOutputStream(fileName).use {
-            it.write(sourceFileBytes)
+            val sourceFileBytes = assetManager.open("$assetPath/$filename").readBytes()
+            FileOutputStream(file).use {
+                it.write(sourceFileBytes)
+            }
         }
     }
 
     fun start(filePath: File) {
-        copyResToFile("omt_geoportail_lu", File(filePath,"mbtiles/omt_geoportail_lu.mbtiles"))
-        copyResToFile("omt_topo_geoportail_lu", File(filePath, "mbtiles/omt_topo_geoportail_lu.mbtiles"))
+        copyAssets("offline_tiles/mbtiles", File(filePath, "mbtiles"))
+        copyAssets("offline_tiles/styles", File(filePath, "styles"))
+        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]

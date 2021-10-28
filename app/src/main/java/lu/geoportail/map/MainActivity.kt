@@ -119,7 +119,7 @@ class MainActivity : Activity() {
 
         val context = getApplicationContext()
 
-        val srv = LuxTileServer(context, resources)
+        val srv = LuxTileServer(context, resources, this.assets)
         srv.start(this.getFilesDir())
 
         view.loadUrl(websiteUrl)
