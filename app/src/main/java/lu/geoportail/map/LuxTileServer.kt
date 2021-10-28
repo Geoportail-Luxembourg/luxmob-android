@@ -22,27 +22,10 @@ import java.io.IOException
 
 
 class LuxTileServer(
-    private val context: Context,
-    private val resources: Resources,
-    private val assets: AssetManager
+    private val assets: AssetManager,
+    private val filePath: File
 ) {
     private lateinit var db: Map<String, SQLiteDatabase>
-    private val staticsMap = mapOf(
-        "omt_geoportail_lu" to "mbtiles/omt_geoportail_lu.mbtiles",
-        "omt_topo_geoportail_lu" to "mbtiles/omt_topo_geoportail_lu.mbtiles",
-        "data_omt_geoportail_lu" to "static/data/omt-geoportail-lu.json",
-        "data_omt_topo_geoportail_lu" to "static/data/omt-topo-geoportail-lu.json",
-        "roadmap_style" to "static/styles/roadmap/style.json",
-        "topomap_style" to "static/styles/topomap/style.json",
-        "topomap_gray_style" to "static/styles/topomap_gray/style.json",
-        "fonts_noto_sans_0_255" to "static/fonts/NotoSansBold/0-255.pbf",
-        "fonts_noto_sans_256_511" to "static/fonts/NotoSansBold/256-511.pbf",
-        "fonts_noto_regular_0_255" to "static/fonts/NotoSansRegular/0-255.pbf",
-        "fonts_noto_regular_256_511" to "static/fonts/NotoSansRegular/256-511.pbf",
-        "fonts_noto_regular_8192_8447" to "static/fonts/NotoSansRegular/8192-8447.pbf"
-    )
-    private val reverseStaticsMap = HashMap<String, String>()
-    private val packageName = context.packageName
 
     private fun copyAssets(assetPath: String, toPathRoot: File) {
         val assetManager: AssetManager = this.assets
@@ -64,10 +47,10 @@ class LuxTileServer(
         }
     }
 
-    fun start(filePath: File) {
-        copyAssets("offline_tiles/mbtiles", File(filePath, "mbtiles"))
-        copyAssets("offline_tiles/styles", File(filePath, "styles"))
-        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
+    fun start() {
+        copyAssets("offline_tiles/mbtiles", File(this.filePath, "mbtiles"))
+//        copyAssets("offline_tiles/styles", File(filePath, "styles"))
+//        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
@@ -75,12 +58,9 @@ class LuxTileServer(
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
 
-        for ((key, value) in staticsMap) {
-            reverseStaticsMap[value] = key
-        }
         this.db = mapOf(
-            "road" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
-            "topo" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_topo_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
+            "road" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
+            "topo" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/topo_tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
         )
         // listen on port 8766
         server.listen(8766)
@@ -88,18 +68,20 @@ class LuxTileServer(
     }
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            val resourceName = reverseStaticsMap[request.path.substring(1)]
-            if (resourceName == null) {
+            val resourcePath = request.path.replace("/static/", "")
+                // repair paths to roadmap/style.json to roadmap_style.json etc.
+                .replace("/style.json", "_style.json")
+            try {
+                val file = this.assets.open("offline_tiles/$resourcePath")
+                val resourceBytes = file.readBytes()
+                response.headers.add("Access-Control-Allow-Origin","*")
+                response.headers.add("Content-Length", resourceBytes.size.toString())
+                response.write(ByteBufferList(resourceBytes))
+            } catch (e: IOException) {
                 response.code(404)
                 response.send("")
                 return@HttpServerRequestCallback
             }
-            response.headers.add("Access-Control-Allow-Origin","*")
-            val resourceBytes = resources.openRawResource(
-                context.resources.getIdentifier(resourceName, "raw", packageName)
-            ).readBytes()
-            response.headers.add("Content-Length", resourceBytes.size.toString())
-            response.write(ByteBufferList(resourceBytes))
         }
 
     private val getMbTile =
