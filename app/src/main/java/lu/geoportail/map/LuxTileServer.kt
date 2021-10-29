@@ -1,7 +1,5 @@
 package lu.geoportail.map
 
-import android.content.Context
-import android.content.res.Resources
 import android.database.Cursor
 import android.database.sqlite.SQLiteBlobTooBigException
 import android.database.sqlite.SQLiteDatabase
@@ -19,6 +17,8 @@ import kotlin.math.pow
 import android.content.res.AssetManager
 import android.util.Log
 import java.io.IOException
+import kotlin.text.MatchResult
+import kotlin.text.Regex
 
 
 class LuxTileServer(
@@ -64,8 +64,46 @@ class LuxTileServer(
         )
         // listen on port 8766
         server.listen(8766)
-        // browsing http://localhost:5001 will return Hello!!!
     }
+    private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
+        var resString = String(resBytes)
+        if (resourcePath.contains("_style.json")) {
+            val files = assets.list("offline_tiles/data")
+            // replace in style definition:
+            // mbtiles://{xxx} by
+            //  - http://127.0.0.1:8766/static/data/xxx.json if xxx is found offline
+            //  - https://vectortiles.geoportail.lu/data/xxx.json if xxx is not found offline
+            resString = resString.replace(Regex("mbtiles://\\{(.*)\\}")) {
+                    mm -> mm.groups[1]?.value?.let {
+                        groupValue: CharSequence -> when {
+                            files.any {f -> "$groupValue.json" == f } -> "http://127.0.0.1:8766/static/data/$groupValue.json"
+                            else -> "https://vectortiles.geoportail.lu/data/$groupValue.json"
+                        }
+                    }!!
+            }
+            // serve local static fonts
+            resString = resString.replace("\"{fontstack}/{range}.pbf", "\"http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf")
+            // remove spaces in fonts path until better solution is found
+            resString = resString.replace("Noto Sans Regular", "NotoSansRegular")
+            resString = resString.replace("Noto Sans Bold", "NotoSansBold")
+        }
+
+        // adapt tile query schema to local server
+        if (resourcePath.contains("omt-geoportail-lu.json")) {
+            resString = resString.replace(
+                "https://vectortiles.geoportail.lu/data/omt-geoportail-lu/{z}/{x}/{y}.pbf",
+                "http://localhost:8766/mbtiles?z={z}&x={x}&y={y}"
+            )
+        }
+        if (resourcePath.contains("omt-topo-geoportail-lu.json")) {
+            resString = resString.replace(
+                "https://vectortiles.geoportail.lu/data/omt-topo-geoportail-lu/{z}/{x}/{y}.pbf",
+                "http://localhost:8766/mbtiles?layer=topo&z={z}&x={x}&y={y}"
+            )
+        }
+        return resString.toByteArray()
+    }
+
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             val resourcePath = request.path.replace("/static/", "")
@@ -73,7 +111,10 @@ class LuxTileServer(
                 .replace("/style.json", "_style.json")
             try {
                 val file = this.assets.open("offline_tiles/$resourcePath")
-                val resourceBytes = file.readBytes()
+                var resourceBytes = file.readBytes()
+                // rewrite URLs in json data, skip binary data such as fonts
+                if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
+
                 response.headers.add("Access-Control-Allow-Origin","*")
                 response.headers.add("Content-Length", resourceBytes.size.toString())
                 response.write(ByteBufferList(resourceBytes))

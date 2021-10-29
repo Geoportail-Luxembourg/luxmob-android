@@ -9,24 +9,24 @@
   "sources": {
     "geoportail.lu_topo_layers": {
       "type": "vector",
-      "url": "http://127.0.0.1:8766/static/data/omt-topo-geoportail-lu.json"
+      "url": "mbtiles://{omt-topo-geoportail-lu}"
     },
     "geoportail.lu_hillshade": {
       "type": "raster",
-      "url": "https://vectortiles.geoportail.lu/data/hillshade-lu.json",
+      "url": "mbtiles://{hillshade-lu}",
       "tileSize": 256
     },
     "openmaptiles_osm": {
       "type": "vector",
-      "url": "https://vectortiles.geoportail.lu/data/omt-osm-cutout-10m.json"
+      "url": "mbtiles://{omt-osm-cutout-10m}"
     },
     "geoportail.lu_contours": {
       "type": "vector",
-      "url": "https://vectortiles.geoportail.lu/data/contours-lu.json"
+      "url": "mbtiles://{contours-lu}"
     }
   },
   "sprite": "https://sprites.geoportail.lu/sprites",
-  "glyphs": "http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",
@@ -1011,7 +1011,7 @@
       "filter": ["==", "$type", "Point"],
       "layout": {
         "text-field": "{housenumber}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-size": 10
       },
       "paint": {"text-color": "rgba(130, 130, 130, 1)"}
@@ -1451,7 +1451,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 8,
         "text-offset": [0, 0.5],
         "text-size": 11,
@@ -1474,7 +1474,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 8,
         "text-offset": [0, 0.5],
         "text-size": 16,
@@ -1497,7 +1497,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name:latin} {name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.1,
         "text-rotation-alignment": "map",
         "text-size": {"base": 1.4, "stops": [[13, 9], [15, 11]]},
@@ -1523,7 +1523,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[11, 19], [15, 24]]},
         "visibility": "visible"
@@ -1544,7 +1544,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["==", "class", "town"]],
       "layout": {
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]},
         "visibility": "visible"
@@ -1565,7 +1565,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["in", "class", "city"]],
       "layout": {
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 18], [12, 26]]},
         "visibility": "visible"
@@ -1591,7 +1591,7 @@
       ],
       "layout": {
         "text-field": "{name:latin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -1617,7 +1617,7 @@
       ],
       "layout": {
         "text-field": "{name:latin}",
-        "text-font": ["NotoSansBold"],
+        "text-font": ["Noto Sans Bold"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -3563,7 +3563,7 @@
         "text-padding": 10,
         "text-rotation-alignment": "map",
         "text-field": "{altitude}m",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "visibility": "visible"
       },
       "paint": {
@@ -3631,7 +3631,7 @@
         "text-padding": 10,
         "text-rotation-alignment": "map",
         "text-field": "{altitude}m",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "visibility": "visible"
       },
       "paint": {
@@ -3651,7 +3651,7 @@
       "layout": {
         "text-anchor": "bottom-left",
         "text-field": "{altitude}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[6, 10], [12, 12]]},
         "visibility": "visible",
@@ -3680,7 +3680,7 @@
       "layout": {
         "text-anchor": "bottom-left",
         "text-field": "{altitude}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[6, 10], [12, 12]]},
         "visibility": "visible",
@@ -3708,7 +3708,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "Poste électrique",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -3730,7 +3730,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "{toponyme}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -3752,7 +3752,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -3775,7 +3775,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "Héliport",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -3797,7 +3797,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "Terrain de sport",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "none"
@@ -3839,7 +3839,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "Aire de repos",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -4030,7 +4030,7 @@
         "icon-size": 0.7,
         "visibility": "visible",
         "text-field": "P",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-size": 10
       },
       "paint": {
@@ -4124,7 +4124,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "Gare  de {name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 12,
         "visibility": "visible"
@@ -4150,7 +4150,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.1,
         "text-rotation-alignment": "map",
         "text-size": {"stops": [[6, 12], [15, 15]]},
@@ -4179,7 +4179,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.1,
         "text-rotation-alignment": "map",
         "text-size": {"stops": [[6, 11], [15, 13]]},
@@ -4203,7 +4203,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.1,
         "text-rotation-alignment": "map",
         "text-size": {"base": 1.4, "stops": [[13, 9], [15, 11]]},
@@ -4230,7 +4230,7 @@
         "symbol-placement": "line",
         "symbol-spacing": {"stops": [[9, 200], [10, 400]]},
         "text-field": "{ref}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-offset": [0, 0],
         "text-rotation-alignment": "viewport",
         "text-size": {"stops": [[9, 11], [12, 9]]},
@@ -4254,7 +4254,7 @@
         "symbol-placement": "line",
         "symbol-spacing": 1000,
         "text-field": "{ref}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-offset": [0, 0],
         "text-rotation-alignment": "viewport",
         "text-size": 10,
@@ -4278,7 +4278,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 16,
         "visibility": "visible"
@@ -4300,7 +4300,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 16,
         "visibility": "visible",
@@ -4323,7 +4323,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 14,
         "visibility": "visible",
@@ -4363,7 +4363,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[11, 19], [15, 24]]},
         "visibility": "visible"
@@ -4389,7 +4389,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]},
         "visibility": "visible"
@@ -4411,7 +4411,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["in", "class", "canton"]],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]},
         "visibility": "visible"
@@ -4437,7 +4437,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -4463,7 +4463,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansBold"],
+        "text-font": ["Noto Sans Bold"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"

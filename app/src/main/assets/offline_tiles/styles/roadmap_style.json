@@ -9,20 +9,20 @@
   "sources": {
     "geoportail.lu_layers": {
       "type": "vector",
-      "url": "http://127.0.0.1:8766/static/data/omt-geoportail-lu.json"
+      "url": "mbtiles://{omt-geoportail-lu}"
     },
     "geoportail.lu_hillshade": {
       "type": "raster",
-      "url": "https://vectortiles.geoportail.lu/data/hillshade-lu.json",
+      "url": "mbtiles://{hillshade-lu}",
       "tileSize": 256
     },
     "openmaptiles_osm": {
       "type": "vector",
-      "url": "https://vectortiles.geoportail.lu/data/omt-osm-cutout-10m.json"
+      "url": "mbtiles://{omt-osm-cutout-10m}"
     }
   },
   "sprite": "https://sprites.geoportail.lu/sprites",
-  "glyphs": "http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",
@@ -246,7 +246,7 @@
       "filter": ["==", "$type", "Point"],
       "layout": {
         "text-field": "{housenumber}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-size": 10
       },
       "paint": {"text-color": "rgba(212, 177, 146, 0.4)"}
@@ -821,7 +821,7 @@
         "icon-size": 1,
         "text-anchor": "top",
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 8,
         "text-offset": [0, 0.5],
         "text-size": 11,
@@ -845,7 +845,7 @@
         "icon-size": 1,
         "text-anchor": "top",
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 8,
         "text-offset": [0, 0.5],
         "text-size": 11,
@@ -867,7 +867,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name:latin} {name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.2,
         "text-rotation-alignment": "map",
         "text-size": {"base": 1.2, "stops": [[10, 6], [14, 8]]},
@@ -901,7 +901,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[11, 19], [15, 24]]},
         "visibility": "visible"
@@ -922,7 +922,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["==", "class", "town"]],
       "layout": {
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]},
         "visibility": "visible"
@@ -943,7 +943,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["in", "class", "city"]],
       "layout": {
         "text-field": "{name:latin}\n{name:nonlatin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 18], [12, 26]]},
         "visibility": "visible"
@@ -969,7 +969,7 @@
       ],
       "layout": {
         "text-field": "{name:latin}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -995,7 +995,7 @@
       ],
       "layout": {
         "text-field": "{name:latin}",
-        "text-font": ["NotoSansBold"],
+        "text-font": ["Noto Sans Bold"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -2035,7 +2035,7 @@
       "layout": {
         "icon-size": 1,
         "text-field": "{name}",
-        "text-font": ["NotoSansBold"],
+        "text-font": ["Noto Sans Bold"],
         "text-max-width": 6,
         "text-size": 11,
         "visibility": "visible"
@@ -2058,7 +2058,7 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-letter-spacing": 0.1,
         "text-rotation-alignment": "map",
         "text-size": {"base": 1.6, "stops": [[10, 10], [20, 12]]},
@@ -2084,7 +2084,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": 16,
         "visibility": "visible"
@@ -2120,7 +2120,7 @@
       "layout": {
         "text-anchor": "center",
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 6,
         "text-size": {"stops": [[11, 19], [15, 24]]},
         "visibility": "visible"
@@ -2142,7 +2142,7 @@
       "filter": ["all", ["==", "$type", "Point"], ["in", "class", "canton"]],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]},
         "visibility": "visible"
@@ -2168,7 +2168,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[10, 16], [12, 24]]}
       },
@@ -2193,7 +2193,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansRegular"],
+        "text-font": ["Noto Sans Regular"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
@@ -2219,7 +2219,7 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": ["NotoSansBold"],
+        "text-font": ["Noto Sans Bold"],
         "text-max-width": 10,
         "text-size": {"stops": [[3, 12], [8, 22]]},
         "visibility": "visible"
