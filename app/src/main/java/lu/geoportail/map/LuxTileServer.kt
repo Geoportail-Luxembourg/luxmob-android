@@ -1,7 +1,5 @@
 package lu.geoportail.map
 
-import android.content.Context
-import android.content.res.Resources
 import android.database.Cursor
 import android.database.sqlite.SQLiteBlobTooBigException
 import android.database.sqlite.SQLiteDatabase
@@ -16,43 +14,43 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import kotlin.math.abs
 import kotlin.math.pow
+import android.content.res.AssetManager
+import android.util.Log
+import java.io.IOException
+import kotlin.text.MatchResult
+import kotlin.text.Regex
 
-class LuxTileServer (private val context: Context, private val resources: Resources) {
+
+class LuxTileServer(
+    private val assets: AssetManager,
+    private val filePath: File
+) {
     private lateinit var db: Map<String, SQLiteDatabase>
-    private val staticsMap = mapOf(
-        "omt_geoportail_lu" to "mbtiles/omt_geoportail_lu.mbtiles",
-        "omt_topo_geoportail_lu" to "mbtiles/omt_topo_geoportail_lu.mbtiles",
-        "data_omt_geoportail_lu" to "static/data/omt-geoportail-lu.json",
-        "data_omt_topo_geoportail_lu" to "static/data/omt-topo-geoportail-lu.json",
-        "roadmap_style" to "static/styles/roadmap/style.json",
-        "topomap_style" to "static/styles/topomap/style.json",
-        "topomap_gray_style" to "static/styles/topomap_gray/style.json",
-        "fonts_noto_sans_0_255" to "static/fonts/NotoSansBold/0-255.pbf",
-        "fonts_noto_sans_256_511" to "static/fonts/NotoSansBold/256-511.pbf",
-        "fonts_noto_regular_0_255" to "static/fonts/NotoSansRegular/0-255.pbf",
-        "fonts_noto_regular_256_511" to "static/fonts/NotoSansRegular/256-511.pbf",
-        "fonts_noto_regular_8192_8447" to "static/fonts/NotoSansRegular/8192-8447.pbf"
-    )
-    private val reverseStaticsMap = HashMap<String, String>()
-    private val packageName = context.packageName
 
-    private fun copyResToFile(resourceName: String, fileName: File) {
+    private fun copyAssets(assetPath: String, toPathRoot: File) {
+        val assetManager: AssetManager = this.assets
+        var files: Array<String>? = null
+        try {
+            files = assetManager.list(assetPath)
+        } catch (e: IOException) {
+            Log.e("tag", "Failed to get asset file list.", e)
+        }
+        if(!toPathRoot.exists()) Files.createDirectory(toPathRoot.toPath())
+        if (files != null) for (filename in files) {
+            val file = File(toPathRoot, filename)
+            if (file.exists()) continue
 
-        if (fileName.exists()) return
-
-        if(!fileName.parentFile.exists()) Files.createDirectory(fileName.parentFile.toPath())
-
-        val sourceFileBytes = resources.openRawResource(
-            context.resources.getIdentifier(resourceName, "raw", packageName)
-        ).readBytes()
-        FileOutputStream(fileName).use {
-            it.write(sourceFileBytes)
+            val sourceFileBytes = assetManager.open("$assetPath/$filename").readBytes()
+            FileOutputStream(file).use {
+                it.write(sourceFileBytes)
+            }
         }
     }
 
-    fun start(filePath: File) {
-        copyResToFile("omt_geoportail_lu", File(filePath,"mbtiles/omt_geoportail_lu.mbtiles"))
-        copyResToFile("omt_topo_geoportail_lu", File(filePath, "mbtiles/omt_topo_geoportail_lu.mbtiles"))
+    fun start() {
+        copyAssets("offline_tiles/mbtiles", File(this.filePath, "mbtiles"))
+//        copyAssets("offline_tiles/styles", File(filePath, "styles"))
+//        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
@@ -60,31 +58,71 @@ class LuxTileServer (private val context: Context, private val resources: Resour
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
 
-        for ((key, value) in staticsMap) {
-            reverseStaticsMap[value] = key
-        }
         this.db = mapOf(
-            "road" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
-            "topo" to SQLiteDatabase.openDatabase("${filePath}/mbtiles/omt_topo_geoportail_lu.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
+            "road" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
+            "topo" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/topo_tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
         )
         // listen on port 8766
         server.listen(8766)
-        // browsing http://localhost:5001 will return Hello!!!
     }
+    private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
+        var resString = String(resBytes)
+        if (resourcePath.contains("_style.json")) {
+            val files = assets.list("offline_tiles/data")
+            // replace in style definition:
+            // mbtiles://{xxx} by
+            //  - http://127.0.0.1:8766/static/data/xxx.json if xxx is found offline
+            //  - https://vectortiles.geoportail.lu/data/xxx.json if xxx is not found offline
+            resString = resString.replace(Regex("mbtiles://\\{(.*)\\}")) {
+                    mm -> mm.groups[1]?.value?.let {
+                        groupValue: CharSequence -> when {
+                            files.any {f -> "$groupValue.json" == f } -> "http://127.0.0.1:8766/static/data/$groupValue.json"
+                            else -> "https://vectortiles.geoportail.lu/data/$groupValue.json"
+                        }
+                    }!!
+            }
+            // serve local static fonts
+            resString = resString.replace("\"{fontstack}/{range}.pbf", "\"http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf")
+            // remove spaces in fonts path until better solution is found
+            resString = resString.replace("Noto Sans Regular", "NotoSansRegular")
+            resString = resString.replace("Noto Sans Bold", "NotoSansBold")
+        }
+
+        // adapt tile query schema to local server
+        if (resourcePath.contains("omt-geoportail-lu.json")) {
+            resString = resString.replace(
+                "https://vectortiles.geoportail.lu/data/omt-geoportail-lu/{z}/{x}/{y}.pbf",
+                "http://localhost:8766/mbtiles?z={z}&x={x}&y={y}"
+            )
+        }
+        if (resourcePath.contains("omt-topo-geoportail-lu.json")) {
+            resString = resString.replace(
+                "https://vectortiles.geoportail.lu/data/omt-topo-geoportail-lu/{z}/{x}/{y}.pbf",
+                "http://localhost:8766/mbtiles?layer=topo&z={z}&x={x}&y={y}"
+            )
+        }
+        return resString.toByteArray()
+    }
+
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            val resourceName = reverseStaticsMap[request.path.substring(1)]
-            if (resourceName == null) {
+            val resourcePath = request.path.replace("/static/", "")
+                // repair paths to roadmap/style.json to roadmap_style.json etc.
+                .replace("/style.json", "_style.json")
+            try {
+                val file = this.assets.open("offline_tiles/$resourcePath")
+                var resourceBytes = file.readBytes()
+                // rewrite URLs in json data, skip binary data such as fonts
+                if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
+
+                response.headers.add("Access-Control-Allow-Origin","*")
+                response.headers.add("Content-Length", resourceBytes.size.toString())
+                response.write(ByteBufferList(resourceBytes))
+            } catch (e: IOException) {
                 response.code(404)
                 response.send("")
                 return@HttpServerRequestCallback
             }
-            response.headers.add("Access-Control-Allow-Origin","*")
-            val resourceBytes = resources.openRawResource(
-                context.resources.getIdentifier(resourceName, "raw", packageName)
-            ).readBytes()
-            response.headers.add("Content-Length", resourceBytes.size.toString())
-            response.write(ByteBufferList(resourceBytes))
         }
 
     private val getMbTile =
