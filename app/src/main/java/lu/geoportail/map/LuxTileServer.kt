@@ -95,15 +95,19 @@ class LuxTileServer(
         outputStream.use { it.write(meta.getString("version").toByteArray())}
     }
 
-    private fun getMeta(ressourceName: String): JSONObject? {
+    private fun getAllMeta(): JSONObject? {
         // metadata will be read from local file until it is available online
         return try {
             val url = URL("file:${this.filePath}/dl/versions.json")
-            val rootJson = JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
-            rootJson.getJSONObject(ressourceName)
+            JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
         } catch (e: FileNotFoundException) {
             null
         }
+    }
+
+    private fun getMeta(ressourceName: String): JSONObject? {
+        // metadata will be read from local file until it is available online
+        return getAllMeta()?.getJSONObject(ressourceName)
     }
 
     private fun createVersionFiles() {
@@ -274,10 +278,12 @@ class LuxTileServer(
 
             val json = JSONObject()
 
-            for (resName in arrayOf("omt-geoportail", "omt-topo-geoportail", "contours", "hillshade", "ressources", "fonts", "sprites")) {
+            val allMeta = getAllMeta()
+
+            for (resName in allMeta!!.keys()) {
                 json.put(resName, JSONObject(mapOf(
                     "current" to getVer(resName),
-                    "available" to getMeta(resName)?.getString("version")
+                    "available" to allMeta.getJSONObject(resName)?.getString("version")
                 )))
             }
 
