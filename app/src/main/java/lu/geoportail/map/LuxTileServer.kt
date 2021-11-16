@@ -16,6 +16,7 @@ import android.content.res.AssetManager
 import android.util.Log
 import org.json.JSONObject
 import java.io.*
+import java.net.ConnectException
 import java.net.URL
 import kotlin.text.Regex
 
@@ -49,22 +50,6 @@ class LuxTileServer(
             FileOutputStream(file).use {
                 it.write(sourceFileBytes)
             }
-        }
-    }
-
-    private fun downloadAllAssets(assetUrl: String, toPathRoot: File) {
-        val indexString = String(URL(assetUrl).openStream().use { it.readBytes() })
-        for (line in indexString.lines()) {
-            val mat = ".*href=\"(.*)\">.*".toPattern().matcher(line)
-
-            if (!mat.matches()) {
-                continue
-            }
-            val url = mat.group(1)
-
-            if (url == "/") continue
-
-            downloadAssets(assetUrl + url, toPathRoot)
         }
     }
 
@@ -131,13 +116,8 @@ class LuxTileServer(
     }
 
     fun start() {
-        // copy version.json (the only file inside offline_tiles°
+        // copy version.json (the only file inside offline_tiles) this is temprary until the version file is online
         copyAssets("offline_tiles", File(this.filePath, "dl"))
-//        copyAssets("offline_tiles/mbtiles", File(this.filePath, "mbtiles"))
-//        copyAssets("offline_tiles/data", File(this.filePath, "data"))
-//        copyAssets("offline_tiles/styles", File(filePath, "styles"))
-//        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
-        // val pDialog = ProgressDialog(this)
 
         createVersionFiles()
 
@@ -148,7 +128,6 @@ class LuxTileServer(
         server.post("/update", updateData)
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
-        server.get("/versionfiles", getVersions)
 
         this.db = mapOf(
             "road" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
@@ -178,8 +157,8 @@ class LuxTileServer(
             // serve local static fonts
             resString = resString.replace("\"{fontstack}/{range}.pbf", "\"http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf")
             // remove spaces in fonts path until better solution is found
-            resString = resString.replace("Noto Sans Regular", "NotoSansRegular")
-            resString = resString.replace("Noto Sans Bold", "NotoSansBold")
+            // resString = resString.replace("Noto Sans Regular", "NotoSansRegular")
+            // resString = resString.replace("Noto Sans Bold", "NotoSansBold")
         }
 
         // adapt tile query schema to local server
@@ -287,90 +266,6 @@ class LuxTileServer(
             response.send("")
         }
 
-    // serve static version information as a stub until local filesystem is ready
-    private val getVersions =
-        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.setContentType("application/json")
-
-            val mapName: String? = request.query.getString("map")
-
-            if (mapName == "omt-geoportail") {
-                response.send(
-                    JSONObject(
-                        mapOf(
-                            "name" to "omt-geoportail",
-                            "version" to "2.7.3",
-                            "sources" to listOf(
-                                "https://vectortiles-sync.geoportail.lu/mbtiles/tiles_luxembourg.mbtiles"
-                            )
-                        )
-                    )
-                )
-            }
-            else if (mapName == "omt-topo-geoportail") {
-                response.send(
-                    JSONObject(
-                        mapOf(
-                            "name" to "omt-topo-geoportail",
-                            "version" to "3.4",
-                            "sources" to listOf(
-                                "https://vectortiles-sync.geoportail.lu/mbtiles/topo_tiles_luxembourg.mbtiles"
-                            )
-                        )
-                    )
-                )
-            }
-            else if (mapName == "contours") {
-                response.send(
-                    JSONObject(
-                        mapOf(
-                            "name" to "contours",
-                            "version" to "2.7.3",
-                            "sources" to listOf(
-                                "https://vectortiles-sync.geoportail.lu/mbtiles/contours.mbtiles"
-                            )
-                        )
-                    )
-                )
-            }
-            else if (mapName == "hillshade") {
-                response.send(
-                    JSONObject(
-                        mapOf(
-                            "name" to "hillshade",
-                            "version" to "2.7.3",
-                            "sources" to listOf(
-                                "https://vectortiles-sync.geoportail.lu/mbtiles/hillshade.mbtiles"
-                            )
-                        )
-                    )
-                )
-            }
-            else if (mapName == "ressources") {
-                response.send(
-                    JSONObject(
-                        mapOf(
-                            "name" to "ressources",
-                            "version" to "2.7.3",
-                            "sources" to listOf(
-                                "https://vectortiles-sync.geoportail.lu/data/omt-geoportail-lu.json",
-                                "https://vectortiles-sync.geoportail.lu/data/omt-topo-geoportail-lu.json",
-                                "https://vectortiles-sync.geoportail.lu/data/contours-lu.json",
-                                // "https://vectortiles-sync.geoportail.lu/data/hillshade-lu.json",
-                                // "https://vectortiles-sync.geoportail.lu/data/omt-osm-cutout-10m.json",
-
-                                "https://vectortiles-sync.geoportail.lu/styles/roadmap.json",
-                                "https://vectortiles-sync.geoportail.lu/styles/topomap.json",
-                                "https://vectortiles-sync.geoportail.lu/styles/topomap_gray.json"
-                            )
-                        )
-                    )
-                )
-            }
-        }
-
     private val checkData =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
 
@@ -399,9 +294,16 @@ class LuxTileServer(
                 val dl = Thread {
                     try {
                         downloadAssetsFromMeta(meta, File(this.filePath, "dl"))
+                        // version is not saved if update has failed (exception occurred)
                         saveVer(meta, mapName)
                     }
-                    catch (e: FileNotFoundException) {
+                    catch (e: Exception) {
+                        if (e is FileNotFoundException) {
+                            Log.i("MetaDL","File not found : ${e.message}")// log file not found
+                        }
+                        else if (e is ConnectException) {
+                            Log.i("MetaDL","Connection Failed : ${e.message}")
+                        }
 
                     }
                 }
