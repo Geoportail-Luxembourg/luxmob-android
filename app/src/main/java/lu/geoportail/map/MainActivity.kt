@@ -16,6 +16,7 @@ import android.webkit.WebChromeClient
 class MainActivity : Activity() {
     // val websiteUrl = "https://map.geoportail.lu/?localforage=android" // production
     private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766/static&embeddedserverprotocol=http&version=3"
+    //private val websiteUrl = "https://migration.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766/static&embeddedserverprotocol=http&version=3"
     // private val websiteUrl = "http://10.0.2.2:5000/?localforage=android&localhost" // localhost
 
     private val MY_PERMISSIONS_REQUEST_LOCATION = 1

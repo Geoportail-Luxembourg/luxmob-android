@@ -1,5 +1,6 @@
 package lu.geoportail.map
 
+import android.app.ProgressDialog
 import android.database.Cursor
 import android.database.sqlite.SQLiteBlobTooBigException
 import android.database.sqlite.SQLiteDatabase
@@ -8,16 +9,14 @@ import com.koushikdutta.async.http.server.AsyncHttpServer
 import com.koushikdutta.async.http.server.HttpServerRequestCallback
 import com.koushikdutta.async.http.server.AsyncHttpServerRequest
 import com.koushikdutta.async.http.server.AsyncHttpServerResponse
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.io.FileOutputStream
 import java.nio.file.Files
 import kotlin.math.abs
 import kotlin.math.pow
 import android.content.res.AssetManager
 import android.util.Log
-import java.io.IOException
-import kotlin.text.MatchResult
+import org.json.JSONObject
+import java.io.*
+import java.net.URL
 import kotlin.text.Regex
 
 
@@ -35,28 +34,121 @@ class LuxTileServer(
         } catch (e: IOException) {
             Log.e("tag", "Failed to get asset file list.", e)
         }
-        if(!toPathRoot.exists()) Files.createDirectory(toPathRoot.toPath())
+        if(!toPathRoot.exists()) Files.createDirectories(toPathRoot.toPath())
         if (files != null) for (filename in files) {
+            val sourceFileBytes = try {
+                assetManager.open("$assetPath/$filename").use { it.readBytes() }
+            }
+            catch (e: IOException) {
+                // exception caught if filename designates a subfolder instead of a file
+                continue
+            }
             val file = File(toPathRoot, filename)
             if (file.exists()) continue
 
-            val sourceFileBytes = assetManager.open("$assetPath/$filename").readBytes()
             FileOutputStream(file).use {
                 it.write(sourceFileBytes)
             }
         }
     }
 
+    private fun downloadAllAssets(assetUrl: String, toPathRoot: File) {
+        val indexString = String(URL(assetUrl).openStream().use { it.readBytes() })
+        for (line in indexString.lines()) {
+            val mat = ".*href=\"(.*)\">.*".toPattern().matcher(line)
+
+            if (!mat.matches()) {
+                continue
+            }
+            val url = mat.group(1)
+
+            if (url == "/") continue
+
+            downloadAssets(assetUrl + url, toPathRoot)
+        }
+    }
+
+    private fun downloadAssetsFromMeta(json: JSONObject, toPathRoot: File) {
+        val sources = json.getJSONArray("sources")
+        for (i in 0 until sources.length()) {
+            downloadAssets(sources.getString(i), toPathRoot)
+        }
+    }
+
+    private fun downloadAssets(assetUrl: String, toPathRoot: File) {
+        val url = URL(assetUrl)
+        val filename =url.file
+        val file = File(toPathRoot, filename)
+        if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
+
+        val sourceStream = url.openStream()
+        val fileOutputStream = FileOutputStream(file)
+        val buf = ByteArray(1024)
+        var len: Int
+        while (sourceStream.read(buf).also { len = it } > 0) {
+            fileOutputStream.write(buf, 0, len)
+        }
+        sourceStream.close()
+        fileOutputStream.close()
+    }
+
+    private fun getVer(ressourceName: String): String? {
+        // metadata will be read from local file until it is available online
+        return try {
+            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.ver")
+            url.openStream().readBytes().toString(Charsets.UTF_8)
+        }
+        catch (e: FileNotFoundException) {
+            null
+        }
+
+    }
+
+    private fun saveVer(meta: JSONObject, name: String) {
+        // metadata will be read from local file until it is available online
+        val outputStream = FileOutputStream(File("${this.filePath}/dl/versions/$name.ver"))
+        outputStream.use { it.write(meta.getString("version").toByteArray())}
+    }
+
+    private fun getMeta(ressourceName: String): JSONObject? {
+        // metadata will be read from local file until it is available online
+        return try {
+            val url = URL("file:${this.filePath}/dl/versions.json")
+            val rootJson = JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
+            rootJson.getJSONObject(ressourceName)
+        } catch (e: FileNotFoundException) {
+            null
+        }
+    }
+
+    private fun createVersionFiles() {
+        // temporary data until version files are online
+        Files.createDirectories(File(this.filePath, "dl/versions/").toPath())
+        var fileOutputStream = FileOutputStream(File(this.filePath, "dl/versions/omt-geoportail.ver"))
+        fileOutputStream.use { it.write("1.7.3".toByteArray())}
+        fileOutputStream = FileOutputStream(File(this.filePath, "dl/versions/omt-topo-geoportail.ver"))
+        fileOutputStream.use { it.write("2.1.3".toByteArray())}
+    }
+
     fun start() {
-        copyAssets("offline_tiles/mbtiles", File(this.filePath, "mbtiles"))
+        // copy version.json (the only file inside offline_tiles°
+        copyAssets("offline_tiles", File(this.filePath, "dl"))
+//        copyAssets("offline_tiles/mbtiles", File(this.filePath, "mbtiles"))
+//        copyAssets("offline_tiles/data", File(this.filePath, "data"))
 //        copyAssets("offline_tiles/styles", File(filePath, "styles"))
 //        copyAssets("offline_tiles/sprites", File(filePath, "sprites"))
+        // val pDialog = ProgressDialog(this)
+
+        createVersionFiles()
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
         server.get("/hello") { request, response -> response.send("Hello!!!$request") }
+        server.get("/check", checkData)
+        server.post("/update", updateData)
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
+        server.get("/versionfiles", getVersions)
 
         this.db = mapOf(
             "road" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
@@ -67,19 +159,21 @@ class LuxTileServer(
     }
     private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
         var resString = String(resBytes)
-        if (resourcePath.contains("_style.json")) {
-            val files = assets.list("offline_tiles/data")
+        if (resourcePath.contains("styles/")) {
+            // val files = assets.list("offline_tiles/data")
+            val files = File("${this.filePath}/dl/data").listFiles()
+
             // replace in style definition:
             // mbtiles://{xxx} by
             //  - http://127.0.0.1:8766/static/data/xxx.json if xxx is found offline
             //  - https://vectortiles.geoportail.lu/data/xxx.json if xxx is not found offline
             resString = resString.replace(Regex("mbtiles://\\{(.*)\\}")) {
                     mm -> mm.groups[1]?.value?.let {
-                        groupValue: CharSequence -> when {
-                            files.any {f -> "$groupValue.json" == f } -> "http://127.0.0.1:8766/static/data/$groupValue.json"
-                            else -> "https://vectortiles.geoportail.lu/data/$groupValue.json"
-                        }
-                    }!!
+                    groupValue: CharSequence -> when {
+                files.any {f -> "$groupValue.json" == f.name } -> "http://127.0.0.1:8766/static/data/$groupValue.json"
+                else -> "https://vectortiles.geoportail.lu/data/$groupValue.json"
+            }
+            }!!
             }
             // serve local static fonts
             resString = resString.replace("\"{fontstack}/{range}.pbf", "\"http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf")
@@ -108,10 +202,12 @@ class LuxTileServer(
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             val resourcePath = request.path.replace("/static/", "")
                 // repair paths to roadmap/style.json to roadmap_style.json etc.
-                .replace("/style.json", "_style.json")
+                .replace("/style.json", ".json")
             try {
-                val file = this.assets.open("offline_tiles/$resourcePath")
-                var resourceBytes = file.readBytes()
+                // val file = this.assets.open("offline_tiles/$resourcePath")
+                val file = File("${this.filePath}/dl", resourcePath)
+                var resourceBytes = FileInputStream(file).use{ it.readBytes()}
+                // file.close()
                 // rewrite URLs in json data, skip binary data such as fonts
                 if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
 
@@ -141,7 +237,7 @@ class LuxTileServer(
 
             val curs = db[layer]?.query(
                 "tiles",
-                Array(1) { _ -> "tile_data" },
+                Array(1) { "tile_data" },
                 "zoom_level = $z AND tile_column = $x AND tile_row = $y",
                 null,
                 null,
@@ -171,8 +267,8 @@ class LuxTileServer(
                     curs?.moveToFirst()
                     // query sqlite DB by 1MB chunks because SQLiteCursor is limited to 2MB
                     // in the current DB, this case only occurs for one tile (x=264&y=174&z=9&layer=topo)
-                    val ll = (if (curs != null) curs.getInt(0) else 0)
-                    val buf: ByteArray = ByteArray(ll)
+                    val ll = (curs?.getInt(0) ?: 0)
+                    val buf = ByteArray(ll)
                     for (i in 0..ll.div(1000*1000)) {
                         val curs = db[layer]?.rawQuery(
                             "select substr(tile_data, ${1 + i*1000*1000}, ${(i+1)*1000*1000}) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
@@ -190,4 +286,140 @@ class LuxTileServer(
             response.code(404)
             response.send("")
         }
+
+    // serve static version information as a stub until local filesystem is ready
+    private val getVersions =
+        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.setContentType("application/json")
+
+            val mapName: String? = request.query.getString("map")
+
+            if (mapName == "omt-geoportail") {
+                response.send(
+                    JSONObject(
+                        mapOf(
+                            "name" to "omt-geoportail",
+                            "version" to "2.7.3",
+                            "sources" to listOf(
+                                "https://vectortiles-sync.geoportail.lu/mbtiles/tiles_luxembourg.mbtiles"
+                            )
+                        )
+                    )
+                )
+            }
+            else if (mapName == "omt-topo-geoportail") {
+                response.send(
+                    JSONObject(
+                        mapOf(
+                            "name" to "omt-topo-geoportail",
+                            "version" to "3.4",
+                            "sources" to listOf(
+                                "https://vectortiles-sync.geoportail.lu/mbtiles/topo_tiles_luxembourg.mbtiles"
+                            )
+                        )
+                    )
+                )
+            }
+            else if (mapName == "contours") {
+                response.send(
+                    JSONObject(
+                        mapOf(
+                            "name" to "contours",
+                            "version" to "2.7.3",
+                            "sources" to listOf(
+                                "https://vectortiles-sync.geoportail.lu/mbtiles/contours.mbtiles"
+                            )
+                        )
+                    )
+                )
+            }
+            else if (mapName == "hillshade") {
+                response.send(
+                    JSONObject(
+                        mapOf(
+                            "name" to "hillshade",
+                            "version" to "2.7.3",
+                            "sources" to listOf(
+                                "https://vectortiles-sync.geoportail.lu/mbtiles/hillshade.mbtiles"
+                            )
+                        )
+                    )
+                )
+            }
+            else if (mapName == "ressources") {
+                response.send(
+                    JSONObject(
+                        mapOf(
+                            "name" to "ressources",
+                            "version" to "2.7.3",
+                            "sources" to listOf(
+                                "https://vectortiles-sync.geoportail.lu/data/omt-geoportail-lu.json",
+                                "https://vectortiles-sync.geoportail.lu/data/omt-topo-geoportail-lu.json",
+                                "https://vectortiles-sync.geoportail.lu/data/contours-lu.json",
+                                // "https://vectortiles-sync.geoportail.lu/data/hillshade-lu.json",
+                                // "https://vectortiles-sync.geoportail.lu/data/omt-osm-cutout-10m.json",
+
+                                "https://vectortiles-sync.geoportail.lu/styles/roadmap.json",
+                                "https://vectortiles-sync.geoportail.lu/styles/topomap.json",
+                                "https://vectortiles-sync.geoportail.lu/styles/topomap_gray.json"
+                            )
+                        )
+                    )
+                )
+            }
+        }
+
+    private val checkData =
+        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.setContentType("application/json")
+
+            val json = JSONObject()
+
+            for (resName in arrayOf("omt-geoportail", "omt-topo-geoportail", "contours", "hillshade", "ressources", "fonts", "sprites")) {
+                json.put(resName, JSONObject(mapOf(
+                    "current" to getVer(resName),
+                    "available" to getMeta(resName)?.getString("version")
+                )))
+            }
+
+            response.send(json)
+        }
+
+    private val updateData =
+        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+            val mapName: String? = request.query.getString("map")
+
+            val meta: JSONObject
+            try {
+                meta = getMeta(mapName!!)!!
+                val dl = Thread {
+                    try {
+                        downloadAssetsFromMeta(meta, File(this.filePath, "dl"))
+                        saveVer(meta, mapName)
+                    }
+                    catch (e: FileNotFoundException) {
+
+                    }
+                }
+                dl.start()
+                // there are 2 possibilities here: async launch of DL and response code 202 (accepted)
+                // problem here is to check for return value (404 hard to implement)
+                // or waiting for dl then return 204 (no content)
+                // the used http server seems to be single threaded, at least other requests seem to remain
+                // blocked until this transaction return => might be better to use 202
+                response.code(202)
+            }
+            catch (e: Exception) {
+                response.code(404)
+            }
+
+            response.headers.add("Access-Control-Allow-Origin", "*")
+
+            response.send("")
+        }
 }
+
