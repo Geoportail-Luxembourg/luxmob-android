@@ -1,6 +1,5 @@
 package lu.geoportail.map
 
-import android.app.ProgressDialog
 import android.database.Cursor
 import android.database.sqlite.SQLiteBlobTooBigException
 import android.database.sqlite.SQLiteDatabase
@@ -13,9 +12,12 @@ import java.nio.file.Files
 import kotlin.math.abs
 import kotlin.math.pow
 import android.content.res.AssetManager
+import android.database.sqlite.SQLiteCantOpenDatabaseException
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
+import java.lang.Thread.sleep
 import java.net.ConnectException
 import java.net.URL
 import kotlin.text.Regex
@@ -25,7 +27,8 @@ class LuxTileServer(
     private val assets: AssetManager,
     private val filePath: File
 ) {
-    private lateinit var db: Map<String, SQLiteDatabase>
+    private var db: MutableMap<String, SQLiteDatabase?> = mutableMapOf()
+    private var dlThreads: MutableMap<String, Thread?> = mutableMapOf()
 
     private fun copyAssets(assetPath: String, toPathRoot: File) {
         val assetManager: AssetManager = this.assets
@@ -66,7 +69,7 @@ class LuxTileServer(
         val file = File(toPathRoot, filename)
         if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
 
-        val sourceStream = url.openStream()
+        val sourceStream = BufferedInputStream(url.openStream())
         val fileOutputStream = FileOutputStream(file)
         val buf = ByteArray(1024)
         var len: Int
@@ -77,22 +80,61 @@ class LuxTileServer(
         fileOutputStream.close()
     }
 
+    private fun deleteAssets(sourcePaths: JSONArray, basePath: File) {
+        for (i in 0 until sourcePaths.length()) {
+            val url = URL(sourcePaths.getString(i))
+            val filename =url.file
+            val file = File(basePath, filename)
+            file.delete()
+        }
+    }
+
+    private fun moveAssets(sourcePaths: JSONArray, fromPath: File, toPath: File) {
+        for (i in 0 until sourcePaths.length()) {
+            val url = URL(sourcePaths.getString(i))
+            val filename =url.file
+            val file = File( fromPath, filename)
+            file.renameTo(File(toPath, filename))
+        }
+    }
+
+    private fun getPaths(ressourceName: String): JSONArray {
+        // metadata will be read from local file until it is available online
+        return try {
+            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
+            val json = JSONObject(url.openStream().use { it.readBytes() }.toString(Charsets.UTF_8))
+            json.getJSONArray("sources") ?: JSONArray()
+        } catch (e: FileNotFoundException) {
+            JSONArray()
+        }
+    }
+
     private fun getVer(ressourceName: String): String? {
         // metadata will be read from local file until it is available online
         return try {
-            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.ver")
-            url.openStream().readBytes().toString(Charsets.UTF_8)
+            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
+            val json = JSONObject(url.openStream().use { it.readBytes()}.toString(Charsets.UTF_8))
+            json.getString("version")
         }
         catch (e: FileNotFoundException) {
             null
         }
-
     }
 
-    private fun saveVer(meta: JSONObject, name: String) {
+    private fun getStatus(resName: String): String {
+        val dl = dlThreads[resName]
+        dl?.join(1)
+        return when {
+            dl?.isAlive() ?: false -> "in progress"
+            dl?.state == Thread.State.TERMINATED -> "done"
+            else -> "undefined"
+        }
+    }
+
+    private fun saveMeta(meta: JSONObject, name: String) {
         // metadata will be read from local file until it is available online
-        val outputStream = FileOutputStream(File("${this.filePath}/dl/versions/$name.ver"))
-        outputStream.use { it.write(meta.getString("version").toByteArray())}
+        val outputStream = FileOutputStream(File("${this.filePath}/dl/versions/$name.meta"))
+        outputStream.use { it.write(meta.toString().toByteArray())}
     }
 
     private fun getAllMeta(): JSONObject? {
@@ -133,12 +175,19 @@ class LuxTileServer(
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
 
-        this.db = mapOf(
-            "road" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY),
-            "topo" to SQLiteDatabase.openDatabase("${this.filePath}/mbtiles/topo_tiles_luxembourg.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
-        )
         // listen on port 8766
         server.listen(8766)
+    }
+
+    private fun openDB(name: String): SQLiteDatabase? {
+        // temporary name mapping until mbtile names are corrected on server
+        val new_name = when (name) {
+            "omt-geoportail" -> "tiles_luxembourg"
+            "omt-topo-geoportail" -> "topo_tiles_luxembourg"
+            "topo" -> "topo_tiles_luxembourg"
+            else -> name
+        }
+        return SQLiteDatabase.openDatabase("${this.filePath}/dl/mbtiles/$new_name.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
     }
     private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
         var resString = String(resBytes)
@@ -206,13 +255,23 @@ class LuxTileServer(
 
     private val getMbTile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            var layer = "road"
-            if (request.query.getString("layer") == "topo") layer = "topo"
+            var layer = request.query.getString("layer") ?: "omt-geoportail"
             val z: Int = request.query.getString("z").toInt()
             val x: Int = request.query.getString("x").toInt()
             var y: Int = request.query.getString("y").toInt()
 
             response.headers.add("Access-Control-Allow-Origin","*")
+
+            if (!db.containsKey(layer)) {
+                try {
+                    db[layer] = openDB(layer)
+                }
+                catch (e: SQLiteCantOpenDatabaseException) {
+                    response.code(404)
+                    response.send("")
+                    return@HttpServerRequestCallback
+                }
+            }
 
             // MBTiles by default use TMS for the tiles. Most mapping apps use slippy maps: XYZ schema.
             // We need to handle both.
@@ -282,6 +341,7 @@ class LuxTileServer(
 
             for (resName in allMeta!!.keys()) {
                 json.put(resName, JSONObject(mapOf(
+                    "status" to getStatus(resName),
                     "current" to getVer(resName),
                     "available" to allMeta.getJSONObject(resName)?.getString("version")
                 )))
@@ -296,12 +356,22 @@ class LuxTileServer(
 
             val meta: JSONObject
             try {
+                val runningDL = dlThreads[mapName]
+                if (runningDL?.isAlive() ?: false) {
+                    response.code(409)
+                    response.send("Download already in progress - cannot launch simultaneous DL.\n")
+                    return@HttpServerRequestCallback
+                }
+
                 meta = getMeta(mapName!!)!!
                 val dl = Thread {
                     try {
-                        downloadAssetsFromMeta(meta, File(this.filePath, "dl"))
-                        // version is not saved if update has failed (exception occurred)
-                        saveVer(meta, mapName)
+                        downloadAssetsFromMeta(meta, File(this.filePath, "tmp"))
+                        // move all data to dl folder
+                        deleteAssets(getPaths(mapName), File(this.filePath,"dl"))
+                        moveAssets(meta.getJSONArray("sources"), File(this.filePath, "tmp"), File(this.filePath, "dl"))
+                        // version is saved only if update has been successful (no exception occurred)
+                        saveMeta(meta, mapName)
                     }
                     catch (e: Exception) {
                         if (e is FileNotFoundException) {
@@ -312,8 +382,10 @@ class LuxTileServer(
                         }
 
                     }
+                    Log.i("MetaDL", "Terminated")
                 }
                 dl.start()
+                dlThreads[mapName] = dl
                 // there are 2 possibilities here: async launch of DL and response code 202 (accepted)
                 // problem here is to check for return value (404 hard to implement)
                 // or waiting for dl then return 204 (no content)

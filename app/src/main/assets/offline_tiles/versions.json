@@ -29,6 +29,8 @@
             "https://vectortiles-sync.geoportail.lu/data/omt-geoportail-lu.json",
             "https://vectortiles-sync.geoportail.lu/data/omt-topo-geoportail-lu.json",
             "https://vectortiles-sync.geoportail.lu/data/contours-lu.json",
+            "https://vectortiles-sync.geoportail.lu/data/hillshade-lu.json",
+            "https://vectortiles-sync.geoportail.lu/data/omt-osm-cutout-10m.json",
             "https://vectortiles-sync.geoportail.lu/styles/roadmap.json",
             "https://vectortiles-sync.geoportail.lu/styles/topomap.json",
             "https://vectortiles-sync.geoportail.lu/styles/topomap_gray.json"
@@ -37,12 +39,12 @@
     "fonts": {
         "version": "1.0.0",
         "sources": [
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Regular/0-255.pbf",
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Regular/256-511.pbf",
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Regular/8192-8447.pbf",
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Bold/0-255.pbf",
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Bold/256-511.pbf",
-            "https://vectortiles-sync.geoportail.lu/fonts/Noto%20Sans%20Bold/8192-8447.pbf"
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Regular/0-255.pbf",
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Regular/256-511.pbf",
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Regular/8192-8447.pbf",
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Bold/0-255.pbf",
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Bold/256-511.pbf",
+            "https://vectortiles-sync.geoportail.lu/fonts/Noto Sans Bold/8192-8447.pbf"
         ]
     },
     "sprites": {
