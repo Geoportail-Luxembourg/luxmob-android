@@ -111,11 +111,34 @@ class LuxTileServer(
     }
 
     private fun getVer(ressourceName: String): String? {
-        // metadata will be read from local file until it is available online
         return try {
             val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
             val json = JSONObject(url.openStream().use { it.readBytes()}.toString(Charsets.UTF_8))
             json.getString("version")
+        }
+        catch (e: FileNotFoundException) {
+            null
+        }
+    }
+
+    private fun getSize(ressourceName: String): String? {
+        return try {
+            val dlPath = when(getStatus(ressourceName)) {
+                "in progress" -> "tmp"
+                else -> "dl"
+            }
+            val url = URL("file:${this.filePath}/$dlPath/versions/$ressourceName.meta")
+            val json = JSONObject(url.openStream().use { it.readBytes()}.toString(Charsets.UTF_8))
+            val src = json.getJSONArray("sources")
+            var totalSize: Long = 0
+            for (i in 0 until src.length()) {
+                val filename =URL(src.getString(i)).file
+                totalSize += Files.size(File(
+                    File(this.filePath, dlPath),
+                    filename).toPath()
+                )
+            }
+            totalSize.toString()
         }
         catch (e: FileNotFoundException) {
             null
@@ -132,9 +155,11 @@ class LuxTileServer(
         }
     }
 
-    private fun saveMeta(meta: JSONObject, name: String) {
+    private fun saveMeta(meta: JSONObject, pathName: String) {
         // metadata will be read from local file until it is available online
-        val outputStream = FileOutputStream(File("${this.filePath}/dl/versions/$name.meta"))
+        val parentFolder = File(pathName).parentFile
+        if(!parentFolder.exists()) Files.createDirectories(parentFolder.toPath())
+        val outputStream = FileOutputStream(File(pathName))
         outputStream.use { it.write(meta.toString().toByteArray())}
     }
 
@@ -350,12 +375,13 @@ class LuxTileServer(
             for (resName in allMeta!!.keys()) {
                 json.put(resName, JSONObject(mapOf(
                     "status" to getStatus(resName),
+                    "filesize" to getSize(resName),
                     "current" to getVer(resName),
                     "available" to allMeta.getJSONObject(resName)?.getString("version")
                 )))
             }
 
-            response.send(json)
+            response.send(json.toString(4))
         }
 
     private val updateData =
@@ -374,12 +400,13 @@ class LuxTileServer(
                 meta = getMeta(mapName!!)!!
                 val dl = Thread {
                     try {
+                        saveMeta(meta, "${this.filePath}/tmp/versions/$mapName.meta")
                         downloadAssetsFromMeta(meta, File(this.filePath, "tmp"))
                         // move all data to dl folder
                         deleteAssets(getPaths(mapName), File(this.filePath,"dl"))
                         moveAssets(meta.getJSONArray("sources"), File(this.filePath, "tmp"), File(this.filePath, "dl"))
                         // version is saved only if update has been successful (no exception occurred)
-                        saveMeta(meta, mapName)
+                        saveMeta(meta, "${this.filePath}/dl/versions/$mapName.meta")
                     }
                     catch (e: Exception) {
                         if (e is FileNotFoundException) {
