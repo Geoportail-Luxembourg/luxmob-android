@@ -93,8 +93,9 @@ class LuxTileServer(
         for (i in 0 until sourcePaths.length()) {
             val url = URL(sourcePaths.getString(i))
             val filename =url.file
-            val file = File( fromPath, filename)
-            file.renameTo(File(toPath, filename))
+            val toFile = File(toPath, filename)
+            if(!toFile.parentFile.exists()) Files.createDirectories(toFile.parentFile.toPath())
+            File(fromPath, filename).renameTo(toFile)
         }
     }
 
@@ -215,17 +216,22 @@ class LuxTileServer(
         }
 
         // adapt tile query schema to local server
-        if (resourcePath.contains("omt-geoportail-lu.json")) {
-            resString = resString.replace(
-                "https://vectortiles.geoportail.lu/data/omt-geoportail-lu/{z}/{x}/{y}.pbf",
-                "http://localhost:8766/mbtiles?z={z}&x={x}&y={y}"
-            )
+        if (resourcePath.contains("data/")) {
+            val tilesPath = File(this.filePath,"dl/mbtiles")
+            val mapName = resourcePath.substringAfterLast("/").replace("-lu.json", "")
+            // temporary mapping until files are renamed
+            var tilesName = when (mapName) {
+            "omt-geoportail" -> "tiles_luxembourg"
+            "omt-topo-geoportail" -> "topo_tiles_luxembourg"
+            "topo" -> "topo_tiles_luxembourg"
+            else -> mapName
         }
-        if (resourcePath.contains("omt-topo-geoportail-lu.json")) {
-            resString = resString.replace(
-                "https://vectortiles.geoportail.lu/data/omt-topo-geoportail-lu/{z}/{x}/{y}.pbf",
-                "http://localhost:8766/mbtiles?layer=topo&z={z}&x={x}&y={y}"
-            )
+            if (File(tilesPath, "$tilesName.mbtiles").exists()) {
+                resString = resString.replace(
+                    "https://vectortiles.geoportail.lu/data/${mapName}-lu/{z}/{x}/{y}.pbf",
+                    "http://localhost:8766/mbtiles?layer=${mapName}&z={z}&x={x}&y={y}"
+                )
+            }
         }
         return resString.toByteArray()
     }
@@ -242,6 +248,7 @@ class LuxTileServer(
                 // file.close()
                 // rewrite URLs in json data, skip binary data such as fonts
                 if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
+                if (resourcePath.contains("data/") || resourcePath.contains("styles/")) response.headers.add("Cache-Control","no-store")
 
                 response.headers.add("Access-Control-Allow-Origin","*")
                 response.headers.add("Content-Length", resourceBytes.size.toString())
@@ -333,6 +340,7 @@ class LuxTileServer(
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
 
             response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add("Cache-Control","no-store")
             response.setContentType("application/json")
 
             val json = JSONObject()
@@ -398,6 +406,7 @@ class LuxTileServer(
             }
 
             response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add("Cache-Control","no-store")
 
             response.send("")
         }
