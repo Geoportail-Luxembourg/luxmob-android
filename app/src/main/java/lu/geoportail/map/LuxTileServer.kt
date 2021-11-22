@@ -16,7 +16,14 @@ import android.database.sqlite.SQLiteCantOpenDatabaseException
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.*
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.ByteArrayInputStream
+import java.io.BufferedInputStream
+import java.io.FileOutputStream
+import java.io.FileInputStream
+import java.io.IOException
+import java.nio.file.NoSuchFileException
 import java.lang.Thread.sleep
 import java.net.ConnectException
 import java.net.URL
@@ -134,11 +141,16 @@ class LuxTileServer(
             val src = json.getJSONArray("sources")
             var totalSize: Long = 0
             for (i in 0 until src.length()) {
-                val filename =URL(src.getString(i)).file
-                totalSize += Files.size(File(
-                    File(this.filePath, dlPath),
-                    filename).toPath()
-                )
+                try {
+                    val filename = URL(src.getString(i)).file
+                    totalSize += Files.size(
+                        File(
+                            File(this.filePath, dlPath),
+                            filename
+                        ).toPath()
+                    )
+                }
+                catch (e: NoSuchFileException) {}
             }
             totalSize.toString()
         }
