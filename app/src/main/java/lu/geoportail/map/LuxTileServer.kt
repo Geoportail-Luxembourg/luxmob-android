@@ -80,7 +80,8 @@ class LuxTileServer(
         fileOutputStream.close()
     }
 
-    private fun deleteAssets(sourcePaths: JSONArray, basePath: File) {
+    private fun deleteAssets(mapName: String, basePath: File) {
+        val sourcePaths = getPaths(mapName)
         for (i in 0 until sourcePaths.length()) {
             val url = URL(sourcePaths.getString(i))
             val filename =url.file
@@ -104,7 +105,8 @@ class LuxTileServer(
         return try {
             val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
             val json = JSONObject(url.openStream().use { it.readBytes() }.toString(Charsets.UTF_8))
-            json.getJSONArray("sources") ?: JSONArray()
+            val paths = json.getJSONArray("sources") ?: JSONArray()
+            paths.put("file:/versions/$ressourceName.meta")
         } catch (e: FileNotFoundException) {
             JSONArray()
         }
@@ -197,6 +199,7 @@ class LuxTileServer(
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
         server.get("/hello") { request, response -> response.send("Hello!!!$request") }
         server.get("/check", checkData)
+        server.post("/delete", deleteData)
         server.post("/update", updateData)
         server.get("/mbtiles", getMbTile)
         server.get("/static/.*", getStaticFile)
@@ -384,9 +387,29 @@ class LuxTileServer(
             response.send(json.toString(4))
         }
 
+    private val deleteData =
+        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+            val mapName: String? = request.query.getString("map")
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add("Cache-Control","no-store")
+
+            if (mapName == null) {
+                response.code(404)
+                response.send("Map not found.\n")
+                return@HttpServerRequestCallback
+            }
+            deleteAssets(mapName, File(this.filePath,"dl"))
+            File(this.filePath,"dl/versions/$mapName.meta").delete()
+            response.code(200)
+            response.send("Deleted package $mapName.\n")
+        }
+
     private val updateData =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             val mapName: String? = request.query.getString("map")
+
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add("Cache-Control","no-store")
 
             val meta: JSONObject
             try {
@@ -403,7 +426,7 @@ class LuxTileServer(
                         saveMeta(meta, "${this.filePath}/tmp/versions/$mapName.meta")
                         downloadAssetsFromMeta(meta, File(this.filePath, "tmp"))
                         // move all data to dl folder
-                        deleteAssets(getPaths(mapName), File(this.filePath,"dl"))
+                        deleteAssets(mapName, File(this.filePath,"dl"))
                         moveAssets(meta.getJSONArray("sources"), File(this.filePath, "tmp"), File(this.filePath, "dl"))
                         // version is saved only if update has been successful (no exception occurred)
                         saveMeta(meta, "${this.filePath}/dl/versions/$mapName.meta")
@@ -431,9 +454,6 @@ class LuxTileServer(
             catch (e: Exception) {
                 response.code(404)
             }
-
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add("Cache-Control","no-store")
 
             response.send("")
         }
