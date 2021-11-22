@@ -30,11 +30,15 @@ Comprehensive information is returned for each available data package:
 - Available version on remote server
 
 ### POST /update?map=<mapname>
+alternative RESTful call: PUT /map/<mapname>
+
 launch the download of the offline data package named "mapname". The name must correspond to the top level categories in versions.json
 The server answers with 202 and does the download starts silently in the background.
 The server responds with a 404 if the download of the requested data package is already in progress and does not launch another download until the original request is complete
 
 ### POST /delete?map=<mapname>
+alternative RESTful call: DELETE /map/<mapname>
+
 delete the offline data for the given package name. (same naming as for update)
 
 ## detailed steps of download:

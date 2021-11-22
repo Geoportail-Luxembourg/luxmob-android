@@ -14,6 +14,8 @@ import kotlin.math.pow
 import android.content.res.AssetManager
 import android.database.sqlite.SQLiteCantOpenDatabaseException
 import android.util.Log
+import com.koushikdutta.async.http.AsyncHttpDelete
+import com.koushikdutta.async.http.AsyncHttpPut
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -211,9 +213,17 @@ class LuxTileServer(
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
         server.get("/hello") { request, response -> response.send("Hello!!!$request") }
         server.get("/check", checkData)
+        // REST methods
+        server.addAction(AsyncHttpPut.METHOD, "/map/.*", updateData)
+        server.addAction(AsyncHttpDelete.METHOD, "/map/.*", deleteData)
+        server.addAction("OPTIONS", "/map/.*", checkPreflight)
+        server.addAction(AsyncHttpDelete.METHOD, "/map/.*", deleteData)
+        // legacy methods
         server.post("/delete", deleteData)
         server.post("/update", updateData)
+        // tile server
         server.get("/mbtiles", getMbTile)
+        // static files
         server.get("/static/.*", getStaticFile)
 
         // listen on port 8766
@@ -399,9 +409,18 @@ class LuxTileServer(
             response.send(json.toString(4))
         }
 
+    private val checkPreflight =
+        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add("Access-Control-Allow-Methods", "PUT, DELETE")
+            response.code(200)
+            response.send("")
+        }
+
     private val deleteData =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            val mapName: String? = request.query.getString("map")
+            val mapName: String? = (if (request.path.contains("/map/")) request.path.substringAfterLast("/")
+            else request.query.getString("map"))
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Cache-Control","no-store")
 
@@ -418,7 +437,8 @@ class LuxTileServer(
 
     private val updateData =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            val mapName: String? = request.query.getString("map")
+            val mapName: String? = (if (request.path.contains("/map/")) request.path.substringAfterLast("/")
+            else request.query.getString("map"))
 
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Cache-Control","no-store")
