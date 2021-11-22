@@ -168,7 +168,7 @@ class LuxTileServer(
     private fun getAllMeta(): JSONObject? {
         // metadata will be read from local file until it is available online
         return try {
-            val url = URL("file:${this.filePath}/dl/versions.json")
+            val url = URL("https://vectortiles-sync.geoportail.lu/metadata/resources.meta")
             JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
         } catch (e: FileNotFoundException) {
             null

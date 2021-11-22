@@ -20,7 +20,7 @@ there are three main entrypoints for management of offline data:
 ### GET /check
 retrieve the local state of offline data as a json structure.
 
-Available updates are retrieved from versions.json (currently a static local file, eventually on remote server)
+Available updates are retrieved from resources.meta (on remote server)
 All avaliable versions and download URLs are read from this file
 Then they are compared to the local versions.
 Comprehensive information is returned for each available data package:
