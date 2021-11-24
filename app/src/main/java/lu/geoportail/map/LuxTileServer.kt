@@ -21,12 +21,10 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.ByteArrayInputStream
-import java.io.BufferedInputStream
 import java.io.FileOutputStream
 import java.io.FileInputStream
 import java.io.IOException
 import java.nio.file.NoSuchFileException
-import java.lang.Thread.sleep
 import java.net.ConnectException
 import java.net.URL
 import kotlin.text.Regex
@@ -78,7 +76,7 @@ class LuxTileServer(
         val file = File(toPathRoot, filename)
         if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
 
-        val sourceStream = BufferedInputStream(url.openStream())
+        val sourceStream = url.openStream()
         val fileOutputStream = FileOutputStream(file)
         val buf = ByteArray(1024)
         var len: Int
