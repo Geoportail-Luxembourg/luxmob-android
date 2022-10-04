@@ -83,7 +83,9 @@ class LuxTileServer(
         val file = File(toPathRoot, filename)
         if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
 
-        val sourceStream = url.openStream()
+        val conn = url.openConnection()
+        // conn.setReadTimeout(0)
+        val sourceStream = conn.getInputStream()
         val fileOutputStream = FileOutputStream(file)
         val buf = ByteArray(1024)
         var len: Int
@@ -293,10 +295,14 @@ class LuxTileServer(
 
     private val getStaticFile =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-            val resourcePath = request.path.replace("/static/", "")
+            val relativePath = request.path.replace("/static/", "")
+            val resourcePath = relativePath
                 // repair paths to roadmap/style.json to roadmap_style.json etc.
                 .replace("/style.json", ".json")
             response.headers.add("Access-Control-Allow-Origin","*")
+            if (resourcePath.contains("data/") || resourcePath.contains("styles/")) {
+                response.headers.add("Cache-Control","no-store")
+            }
             try {
                 // val file = this.assets.open("offline_tiles/$resourcePath")
                 val file = File("${this.filePath}/dl", resourcePath)
@@ -304,11 +310,22 @@ class LuxTileServer(
                 // file.close()
                 // rewrite URLs in json data, skip binary data such as fonts
                 if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
-                if (resourcePath.contains("data/") || resourcePath.contains("styles/")) response.headers.add("Cache-Control","no-store")
 
                 response.headers.add("Content-Length", resourceBytes.size.toString())
                 response.write(ByteBufferList(resourceBytes))
             } catch (e: IOException) {
+                if (relativePath.contains("style.json")) {
+                    try {
+                        val onlineUrl = URL("https", "vectortiles.geoportail.lu", relativePath)
+                        val conn = onlineUrl.openConnection()
+                        val sourceStream = conn.getInputStream()
+                        val resourceBytes = sourceStream.use{ it.readBytes()}
+                        response.headers.add("Content-Length", resourceBytes.size.toString())
+                        response.write(ByteBufferList(resourceBytes))
+                        return@HttpServerRequestCallback
+                    }
+                    catch (e: java.lang.Exception) {}
+                }
                 response.code(404)
                 response.send("")
                 return@HttpServerRequestCallback
