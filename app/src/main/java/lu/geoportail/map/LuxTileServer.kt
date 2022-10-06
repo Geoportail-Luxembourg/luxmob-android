@@ -11,7 +11,6 @@ import com.koushikdutta.async.http.server.AsyncHttpServerResponse
 import java.nio.file.Files
 import kotlin.math.abs
 import kotlin.math.pow
-import android.content.res.AssetManager
 import android.database.sqlite.SQLiteCantOpenDatabaseException
 import android.util.Log
 import com.koushikdutta.async.http.AsyncHttpDelete
@@ -38,37 +37,10 @@ import kotlin.text.Regex
 enum class DlState { UNKNOWN, IN_PROGRESS, FAILED, DONE }
 
 class LuxTileServer(
-    private val assets: AssetManager,
     private val filePath: File
 ) {
     private var db: MutableMap<String, SQLiteDatabase?> = mutableMapOf()
     private var dlJobs: MutableMap<String, Job?> = mutableMapOf()
-
-    private fun copyAssets(assetPath: String, toPathRoot: File) {
-        val assetManager: AssetManager = this.assets
-        var files: Array<String>? = null
-        try {
-            files = assetManager.list(assetPath)
-        } catch (e: IOException) {
-            Log.e("tag", "Failed to get asset file list.", e)
-        }
-        if(!toPathRoot.exists()) Files.createDirectories(toPathRoot.toPath())
-        if (files != null) for (filename in files) {
-            val sourceFileBytes = try {
-                assetManager.open("$assetPath/$filename").use { it.readBytes() }
-            }
-            catch (e: IOException) {
-                // exception caught if filename designates a subfolder instead of a file
-                continue
-            }
-            val file = File(toPathRoot, filename)
-            if (file.exists()) continue
-
-            FileOutputStream(file).use {
-                it.write(sourceFileBytes)
-            }
-        }
-    }
 
     private fun downloadAssetsFromMeta(json: JSONObject, toPathRoot: File) {
         val sources = json.getJSONArray("sources")
@@ -179,7 +151,6 @@ class LuxTileServer(
     }
 
     private fun saveMeta(meta: JSONObject, pathName: String) {
-        // metadata will be read from local file until it is available online
         val parentFolder = File(pathName).parentFile
         if(!parentFolder.exists()) Files.createDirectories(parentFolder.toPath())
         val outputStream = FileOutputStream(File(pathName))
@@ -187,7 +158,6 @@ class LuxTileServer(
     }
 
     private fun getAllMeta(): JSONObject? {
-        // metadata will be read from local file until it is available online
         return try {
             val url = URL("https://vectortiles-sync.geoportail.lu/metadata/resources.meta")
             JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
@@ -197,24 +167,10 @@ class LuxTileServer(
     }
 
     private fun getMeta(ressourceName: String): JSONObject? {
-        // metadata will be read from local file until it is available online
         return getAllMeta()?.getJSONObject(ressourceName)
     }
 
-    private fun createVersionFiles() {
-        // temporary data until version files are online
-        Files.createDirectories(File(this.filePath, "dl/versions/").toPath())
-        var fileOutputStream = FileOutputStream(File(this.filePath, "dl/versions/omt-geoportail.ver"))
-        fileOutputStream.use { it.write("1.7.3".toByteArray())}
-        fileOutputStream = FileOutputStream(File(this.filePath, "dl/versions/omt-topo-geoportail.ver"))
-        fileOutputStream.use { it.write("2.1.3".toByteArray())}
-    }
-
     fun start() {
-        // copy version.json (the only file inside offline_tiles) this is temprary until the version file is online
-        copyAssets("offline_tiles", File(this.filePath, "dl"))
-
-        createVersionFiles()
 
         val server = AsyncHttpServer()
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
@@ -250,7 +206,6 @@ class LuxTileServer(
     private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
         var resString = String(resBytes)
         if (resourcePath.contains("styles/")) {
-            // val files = assets.list("offline_tiles/data")
             val files = File("${this.filePath}/dl/data").listFiles()
 
             // replace in style definition:
@@ -304,7 +259,6 @@ class LuxTileServer(
                 response.headers.add("Cache-Control","no-store")
             }
             try {
-                // val file = this.assets.open("offline_tiles/$resourcePath")
                 val file = File("${this.filePath}/dl", resourcePath)
                 var resourceBytes = FileInputStream(file).use{ it.readBytes()}
                 // file.close()
