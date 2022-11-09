@@ -222,6 +222,7 @@ class LuxTileServer(
             }
             // serve local static fonts
             resString = resString.replace("\"{fontstack}/{range}.pbf", "\"http://127.0.0.1:8766/static/fonts/{fontstack}/{range}.pbf")
+            resString = resString.replace("https://sprites.geoportail.lu/sprites", "http://127.0.0.1:8766/static/sprites/sprites")
             // remove spaces in fonts path until better solution is found
             // resString = resString.replace("Noto Sans Regular", "NotoSansRegular")
             // resString = resString.replace("Noto Sans Bold", "NotoSansBold")
