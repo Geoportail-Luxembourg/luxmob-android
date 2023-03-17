@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">LuxMob</string>
+    <string name="app_name">geoportail.lu</string>
     <string name="permission_location">Allow @string/app_name to access your Location? Turn on location services to get your current position.</string>
 </resources>
