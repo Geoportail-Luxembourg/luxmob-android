@@ -49,23 +49,37 @@ class LuxTileServer(
         }
     }
 
-    private fun downloadAssets(assetUrl: String, toPathRoot: File) {
+    private fun downloadAssets(assetUrl: String, toPathRoot: File, retry: Int = 0) {
         val url = URL(assetUrl)
         val filename =url.file
         val file = File(toPathRoot, filename)
         if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
 
-        val conn = url.openConnection()
-        // conn.setReadTimeout(0)
-        val sourceStream = conn.getInputStream()
-        val fileOutputStream = FileOutputStream(file)
-        val buf = ByteArray(1024)
-        var len: Int
-        while (sourceStream.read(buf).also { len = it } > 0) {
-            fileOutputStream.write(buf, 0, len)
+        try {
+            val conn = url.openConnection()
+            // conn.setReadTimeout(0)
+            val sourceStream = conn.getInputStream()
+
+            FileOutputStream(file).use { fileOutputStream ->
+                val buf = ByteArray(1024)
+                var len: Int
+                while (sourceStream.read(buf).also { len = it } > 0) {
+                    fileOutputStream.write(buf, 0, len)
+                }
+            }
+            sourceStream.close() // Close the input
+        } catch (e: Exception) {
+            if (retry < 5) {
+                Log.e("downloadAssets", "Failed to download $assetUrl then retry nb : $retry")
+                Thread.sleep(2000)
+                downloadAssets(assetUrl, toPathRoot, retry + 1)
+            } else {
+                Log.e("downloadAssets", "Failed to download $assetUrl")
+                Log.e("downloadAssets", e.toString())
+            }
+        } finally {
+
         }
-        sourceStream.close()
-        fileOutputStream.close()
     }
 
     private fun deleteAssets(mapName: String, basePath: File) {
@@ -176,6 +190,7 @@ class LuxTileServer(
         server["/", HttpServerRequestCallback { _, response -> response.send("Hello!!!") }]
         server.get("/hello") { request, response -> response.send("Hello!!!$request") }
         server.get("/check", checkData)
+
         // REST methods
         server.addAction(AsyncHttpPut.METHOD, "/map/.*", updateData)
         server.addAction(AsyncHttpDelete.METHOD, "/map/.*", deleteData)
@@ -187,8 +202,10 @@ class LuxTileServer(
         // tile server
         server.get("/mbtiles", getMbTile)
         // static files
+        server.get("/styles/.*", getStaticFile)
+        // static files
         server.get("/static/.*", getStaticFile)
-
+        server.get("/.*", getStaticFile)
         // listen on port 8766
         server.listen(8766)
     }
@@ -279,7 +296,7 @@ class LuxTileServer(
                         response.write(ByteBufferList(resourceBytes))
                         return@HttpServerRequestCallback
                     }
-                    catch (e: java.lang.Exception) {}
+                    catch (e: java.lang.Exception) {Log.i("javalang", e.toString())}
                 }
                 response.code(404)
                 response.send("")
@@ -328,6 +345,7 @@ class LuxTileServer(
                         // return 404 if cursor contains no results
                         response.code(404)
                         response.send("")
+                        curs.close()
                         return@HttpServerRequestCallback
                     }
                     val buf = curs.getBlob(0)
@@ -339,6 +357,7 @@ class LuxTileServer(
                         response.headers.add("Content-Encoding", "gzip")
                     }
                     response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
+                    curs.close()
                     return@HttpServerRequestCallback
                 }
                 catch (e: SQLiteBlobTooBigException) {
@@ -367,6 +386,7 @@ class LuxTileServer(
                         response.headers.add("Content-Encoding", "gzip")
                     }
                     response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
+                    curs?.close()
                     return@HttpServerRequestCallback
                 }
             }
@@ -376,7 +396,6 @@ class LuxTileServer(
 
     private val checkData =
         HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
-
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Cache-Control","no-store")
             response.setContentType("application/json")
@@ -393,16 +412,15 @@ class LuxTileServer(
                 return@HttpServerRequestCallback
 
             }
-
             for (resName in allMeta!!.keys()) {
                 json.put(resName, JSONObject(mapOf(
                     "status" to getStatus(resName).toString(),
                     "filesize" to getSize(resName),
                     "current" to getVer(resName),
-                    "available" to allMeta.getJSONObject(resName)?.getString("version")
+                    "available" to allMeta.getJSONObject(resName).getString("version")
                 )))
             }
-
+            //Log.i("JSON",json.toString(4))
             response.send(json.toString(4))
         }
 
@@ -448,7 +466,6 @@ class LuxTileServer(
                     response.send("Download already in progress - cannot launch simultaneous DL.\n")
                     return@HttpServerRequestCallback
                 }
-
                 meta = getMeta(mapName!!)!!
                 val scope = CoroutineScope(Dispatchers.IO)
                 val threadLocal = ThreadLocal<LuxTileServer>()
@@ -471,7 +488,6 @@ class LuxTileServer(
                         else if (e is ConnectException) {
                             Log.i("MetaDL","Connection Failed : ${e.message}")
                         }
-
                     }
                     Log.i("MetaDL", "Terminated")
                 }

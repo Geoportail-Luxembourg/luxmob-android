@@ -2,17 +2,16 @@ apply plugin: 'com.android.application'
 
 apply plugin: 'kotlin-android'
 
-apply plugin: 'kotlin-android-extensions'
 
 android {
+    namespace 'lu.geoportail.map'
     lintOptions {
         lintConfig file("./linting.xml")
     }
-    compileSdkVersion 29
+    compileSdk = 34
     defaultConfig {
         applicationId "lu.geoportail.map"
-        minSdkVersion 26
-        targetSdkVersion 29
+        minSdkVersion 34
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
@@ -34,13 +33,13 @@ android {
 }
 
 dependencies {
-    implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation"org.jetbrains.kotlinx:kotlinx-coroutines-core:1.1.1"
-    implementation 'androidx.appcompat:appcompat:1.0.0'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4"
+    implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'org.apache.commons:commons-text:1.6'
-    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
     implementation 'com.koushikdutta.async:androidasync:3.0.8'
 }

@@ -15,8 +15,9 @@ import android.webkit.WebChromeClient
 
 class MainActivity : Activity() {
     // must remove "static in path when prod is up to date
-    private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766/static&embeddedserverprotocol=http&version=3"
-    //private val websiteUrl = "https://migration.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766&embeddedserverprotocol=http&version=3"
+    //private val websiteUrl = "https://map.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766&embeddedserverprotocol=http&version=3"
+    private val websiteUrl = "https://migration.geoportail.lu?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766&embeddedserverprotocol=http&version=3"
+    //private val websiteUrl = "https://devrm.geoportail.lu/dev/main.html?localforage=android&applogin=yes&embeddedserver=127.0.0.1:8766&embeddedserverprotocol=http&version=3"
 
     private val MY_PERMISSIONS_REQUEST_LOCATION = 1
     private var mGeoLocationRequestOrigin: String? = null
@@ -35,12 +36,13 @@ class MainActivity : Activity() {
     private fun createAndConfigureWebView() : WebView {
         val view = WebView(applicationContext)
         val settings = view.settings
-        val appCachePath = this.cacheDir.absolutePath
+        //val appCachePath = this.cacheDir.absolutePath
         settings.domStorageEnabled = true
         settings.allowFileAccess = true
         settings.javaScriptEnabled = true
-        settings.setAppCachePath(appCachePath)
-        settings.setAppCacheEnabled(true)
+        //settings.setAppCachePath(appCachePath)
+        //settings.setAppCacheEnabled(true)
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
         view.addJavascriptInterface(JsObject(view), "ngeoHost")
 
         settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
