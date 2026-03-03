@@ -33,7 +33,7 @@ class MainActivity : Activity() {
      */
     @SuppressLint("SetJavaScriptEnabled")
     private fun createAndConfigureWebView() : WebView {
-        val view = WebView(applicationContext)
+        val view = WebView(this)
         val settings = view.settings
         //val appCachePath = this.cacheDir.absolutePath
         settings.domStorageEnabled = true
