@@ -1,6 +1,6 @@
 # Development
 
-- Get android studio from https://developer.android.com/studio/
+- Get Android Studio from https://developer.android.com/studio/
 - Run on real device or emulator using https://developer.android.com/training/basics/firstapp/running-app
 
 # Internal documentation
@@ -18,10 +18,11 @@ An exception is created in the app security policy to allow non-https traffic wi
 there are three main entrypoints for management of offline data:
 
 ### GET /check
-retrieve the local state of offline data as a json structure.
+
+retrieve the local state of offline data as a JSON structure.
 
 Available updates are retrieved from resources.meta (on remote server)
-All avaliable versions and download URLs are read from this file
+All available versions and download URLs are read from this file
 Then they are compared to the local versions.
 Comprehensive information is returned for each available data package:
 - Status (download in progress or complete)

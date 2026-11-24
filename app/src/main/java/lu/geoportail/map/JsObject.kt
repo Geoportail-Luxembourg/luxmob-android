@@ -2,6 +2,7 @@ package lu.geoportail.map
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import androidx.annotation.Keep
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -15,20 +16,14 @@ import org.json.JSONObject
 
 class JsObject(view: WebView) {
 
-    private val backend: IBackend
+    private val backend: IBackend = LocalforageSqliteBackend(view.context)
     private val tag = "JsObject"
     private val webview: WebView = view
-    private val mainHandler = Handler()
-    private var backendThread: HandlerThread? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val backendHandler: Handler by lazy {
         val thread = HandlerThread("backendThread")
         thread.start()
-        backendThread = thread
         Handler(thread.looper)
-    }
-
-    init {
-        backend = LocalforageSqliteBackend(view.context)
     }
 
     @JavascriptInterface
@@ -47,8 +42,7 @@ class JsObject(view: WebView) {
             return
         }
 
-        val command = action.getString("command")
-        when (command) {
+        when (val command = action.getString("command")) {
             "getItem" -> getItem(action)
             "setItem" -> setItem(action)
             "removeItem" -> removeItem(action)
@@ -63,8 +57,8 @@ class JsObject(view: WebView) {
         val key = args.getString(0)
         backendHandler.post {
             val responseArgs = JSONArray()
-            val value = backend.getItem(key, action)
-            if (value?.first() == '{') {
+            val value = backend.getItem(key)
+            if (value?.startsWith('{') == true) {
                 // If the value is actually a JSON object we parse it
                 // Otherwise we would return an array of string, which is not what is expected
                 // from the localforage API.
@@ -81,7 +75,7 @@ class JsObject(view: WebView) {
         val key = args.getString(0)
         val value = args.getString(1)
         backendHandler.post {
-            backend.setItem(key, value, action)
+            backend.setItem(key, value)
             postResponseToWebview(null, action)
         }
     }
@@ -90,21 +84,21 @@ class JsObject(view: WebView) {
         val args = action.getJSONArray("args")
         val key = args.getString(0)
         backendHandler.post {
-            backend.removeItem(key, action)
+            backend.removeItem(key)
             postResponseToWebview(null, action)
         }
     }
 
     private fun clear(action: JSONObject) {
         backendHandler.post {
-            backend.clear(action)
+            backend.clear()
             postResponseToWebview(null, action)
         }
     }
 
     private fun config(action: JSONObject) {
         backendHandler.post {
-            backend.config(action)
+            backend.config()
             postResponseToWebview(null, action)
         }
     }
@@ -121,9 +115,9 @@ class JsObject(view: WebView) {
 
     private fun postErrorToWebview(msg: String, action: JSONObject) {
         val json = JSONObject()
-        json.put("'id'", action.get("id"))
-        json.put("'command'", "error")
-        json.put("'msg'", msg)
+        json.put("id'", action.get("id"))
+        json.put("command", "error")
+        json.put("msg", msg)
         postJsonObjectToWebview(json)
     }
 
