@@ -6,11 +6,11 @@ android {
     namespace = 'lu.geoportail.map'
     compileSdk = 36
     defaultConfig {
-        applicationId = "lu.geoportail.map"
-        minSdk = 34
+        applicationId = "com.c2c.LuxMob"
+        minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 18
+        versionName = "4.0.1"
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildTypes {
