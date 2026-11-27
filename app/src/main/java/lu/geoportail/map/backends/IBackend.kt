@@ -1,11 +1,9 @@
 package lu.geoportail.map.backends
 
-import org.json.JSONObject
-
 interface IBackend {
-    fun getItem(key: String, action: JSONObject): String?
-    fun setItem(key: String, base64: String, action: JSONObject)
-    fun removeItem(key: String, action: JSONObject)
-    fun clear(action: JSONObject)
-    fun config(action: JSONObject)
+    fun getItem(key: String): String?
+    fun setItem(key: String, base64: String)
+    fun removeItem(key: String)
+    fun clear()
+    fun config()
 }
