@@ -17,8 +17,12 @@ import com.koushikdutta.async.http.AsyncHttpDelete
 import com.koushikdutta.async.http.AsyncHttpPut
 import org.json.JSONArray
 import org.json.JSONObject
+import com.koushikdutta.async.AsyncServer
+import kotlinx.coroutines.CoroutineExceptionHandler
+import org.json.JSONException
 import java.io.File
 import java.io.FileNotFoundException
+import java.net.InetAddress
 import java.io.ByteArrayInputStream
 import java.io.FileOutputStream
 import java.io.FileInputStream
@@ -26,15 +30,24 @@ import java.io.IOException
 import java.nio.file.NoSuchFileException
 import java.net.ConnectException
 import java.net.URL
-import java.net.UnknownHostException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.asContextElement
 import kotlin.text.Regex
 
 enum class DlState { UNKNOWN, IN_PROGRESS, FAILED, DONE }
+
+private const val CONNECT_TIMEOUT_MS = 30_000
+private const val READ_TIMEOUT_MS = 60_000
+
+// the catalog is small and fetched on the (single-threaded) server thread: keep these short
+private const val META_CONNECT_TIMEOUT_MS = 10_000
+private const val META_READ_TIMEOUT_MS = 10_000
+
+/** A map name must not be able to escape its folder (e.g. "../../databases/x"). */
+private fun isSafeName(name: String): Boolean =
+    name.isNotEmpty() && !name.contains('/') && !name.contains('\\') && !name.contains("..")
 
 class LuxTileServer(
     private val filePath: File
@@ -53,21 +66,22 @@ class LuxTileServer(
         val url = URL(assetUrl)
         val filename =url.file
         val file = File(toPathRoot, filename)
-        if(!file.parentFile.exists()) Files.createDirectories(file.parentFile.toPath())
+        file.parentFile?.let { Files.createDirectories(it.toPath()) }
 
         try {
             val conn = url.openConnection()
-            // conn.setReadTimeout(0)
-            val sourceStream = conn.getInputStream()
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = READ_TIMEOUT_MS
 
-            FileOutputStream(file).use { fileOutputStream ->
-                val buf = ByteArray(1024)
-                var len: Int
-                while (sourceStream.read(buf).also { len = it } > 0) {
-                    fileOutputStream.write(buf, 0, len)
+            conn.getInputStream().use { sourceStream ->
+                FileOutputStream(file).use { fileOutputStream ->
+                    val buf = ByteArray(1024)
+                    var len: Int
+                    while (sourceStream.read(buf).also { len = it } > 0) {
+                        fileOutputStream.write(buf, 0, len)
+                    }
                 }
             }
-            sourceStream.close() // Close the input
         } catch (e: Exception) {
             if (retry < 5) {
                 Log.e("downloadAssets", "Failed to download $assetUrl then retry nb : $retry")
@@ -76,9 +90,9 @@ class LuxTileServer(
             } else {
                 Log.e("downloadAssets", "Failed to download $assetUrl")
                 Log.e("downloadAssets", e.toString())
+                // let the update fail, so an incomplete map is not saved as the current version
+                throw e
             }
-        } finally {
-
         }
     }
 
@@ -97,41 +111,40 @@ class LuxTileServer(
             val url = URL(sourcePaths.getString(i))
             val filename =url.file
             val toFile = File(toPath, filename)
-            if(!toFile.parentFile.exists()) Files.createDirectories(toFile.parentFile.toPath())
+            toFile.parentFile?.let { Files.createDirectories(it.toPath()) }
             File(fromPath, filename).renameTo(toFile)
         }
     }
 
-    private fun getPaths(ressourceName: String): JSONArray {
+    private fun getPaths(resourceName: String): JSONArray {
         // metadata will be read from local file until it is available online
         return try {
-            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
+            val url = URL("file:${this.filePath}/dl/versions/$resourceName.meta")
             val json = JSONObject(url.openStream().use { it.readBytes() }.toString(Charsets.UTF_8))
-            val paths = json.getJSONArray("sources") ?: JSONArray()
-            paths.put("file:/versions/$ressourceName.meta")
-        } catch (e: FileNotFoundException) {
+            val paths = json.getJSONArray("sources")
+            paths.put("file:/versions/$resourceName.meta")
+        } catch (_: FileNotFoundException) {
             JSONArray()
         }
     }
 
-    private fun getVer(ressourceName: String): String? {
+    private fun getVer(resourceName: String): String? {
         return try {
-            val url = URL("file:${this.filePath}/dl/versions/$ressourceName.meta")
+            val url = URL("file:${this.filePath}/dl/versions/$resourceName.meta")
             val json = JSONObject(url.openStream().use { it.readBytes()}.toString(Charsets.UTF_8))
             json.getString("version")
-        }
-        catch (e: FileNotFoundException) {
+        } catch (_: FileNotFoundException) {
             null
         }
     }
 
-    private fun getSize(ressourceName: String): String? {
+    private fun getSize(resourceName: String): String? {
         return try {
-            val dlPath = when(getStatus(ressourceName)) {
+            val dlPath = when (getStatus(resourceName)) {
                 DlState.IN_PROGRESS -> "tmp"
                 else -> "dl"
             }
-            val url = URL("file:${this.filePath}/$dlPath/versions/$ressourceName.meta")
+            val url = URL("file:${this.filePath}/$dlPath/versions/$resourceName.meta")
             val json = JSONObject(url.openStream().use { it.readBytes()}.toString(Charsets.UTF_8))
             val src = json.getJSONArray("sources")
             var totalSize: Long = 0
@@ -144,12 +157,11 @@ class LuxTileServer(
                             filename
                         ).toPath()
                     )
+                } catch (_: NoSuchFileException) {
                 }
-                catch (e: NoSuchFileException) {}
             }
             totalSize.toString()
-        }
-        catch (e: FileNotFoundException) {
+        } catch (_: FileNotFoundException) {
             null
         }
     }
@@ -166,22 +178,29 @@ class LuxTileServer(
 
     private fun saveMeta(meta: JSONObject, pathName: String) {
         val parentFolder = File(pathName).parentFile
-        if(!parentFolder.exists()) Files.createDirectories(parentFolder.toPath())
+        parentFolder?.let { Files.createDirectories(it.toPath()) }
         val outputStream = FileOutputStream(File(pathName))
         outputStream.use { it.write(meta.toString().toByteArray())}
     }
 
+    /**
+     * Returns null if the catalog does not exist (HTTP 404).
+     * Throws IOException on network errors / timeouts.
+     */
     private fun getAllMeta(): JSONObject? {
         return try {
-            val url = URL("https://vectortiles-sync.geoportail.lu/metadata/resources.meta")
-            JSONObject(url.openStream().readBytes().toString(Charsets.UTF_8))
-        } catch (e: FileNotFoundException) {
+            val conn =
+                URL("https://vectortiles-sync.geoportail.lu/metadata/resources.meta").openConnection()
+            conn.connectTimeout = META_CONNECT_TIMEOUT_MS
+            conn.readTimeout = META_READ_TIMEOUT_MS
+            JSONObject(conn.getInputStream().use { it.readBytes() }.toString(Charsets.UTF_8))
+        } catch (_: FileNotFoundException) {
             null
         }
     }
 
-    private fun getMeta(ressourceName: String): JSONObject? {
-        return getAllMeta()?.getJSONObject(ressourceName)
+    private fun getMeta(resourceName: String): JSONObject? {
+        return getAllMeta()?.getJSONObject(resourceName)
     }
 
     fun start() {
@@ -206,19 +225,24 @@ class LuxTileServer(
         // static files
         server.get("/static/.*", getStaticFile)
         server.get("/.*", getStaticFile)
-        // listen on port 8766
-        server.listen(8766)
+        // listen on port 8766, on the loopback interface only (not reachable from the network)
+        AsyncServer.getDefault()
+            .listen(InetAddress.getByName("127.0.0.1"), 8766, server.listenCallback)
     }
 
     private fun openDB(name: String): SQLiteDatabase? {
         // temporary name mapping until mbtile names are corrected on server
-        val new_name = when (name) {
+        val newName = when (name) {
             "omt-geoportail" -> "tiles_luxembourg"
             "omt-topo-geoportail" -> "topo_tiles_luxembourg"
             "topo" -> "topo_tiles_luxembourg"
             else -> name
         }
-        return SQLiteDatabase.openDatabase("${this.filePath}/dl/mbtiles/$new_name.mbtiles", null, SQLiteDatabase.OPEN_READONLY)
+        return SQLiteDatabase.openDatabase(
+            "${this.filePath}/dl/mbtiles/$newName.mbtiles",
+            null,
+            SQLiteDatabase.OPEN_READONLY
+        )
     }
     private fun replaceUrls(resBytes: ByteArray, resourcePath: String): ByteArray {
         var resString = String(resBytes)
@@ -232,7 +256,7 @@ class LuxTileServer(
             resString = resString.replace(Regex("mbtiles://\\{(.*)\\}")) {
                     mm -> mm.groups[1]?.value?.let {
                     groupValue: CharSequence -> when {
-                files.any {f -> "$groupValue.json" == f.name } -> "http://127.0.0.1:8766/static/data/$groupValue.json"
+                files?.any { f -> "$groupValue.json" == f.name } == true -> "http://127.0.0.1:8766/static/data/$groupValue.json"
                 else -> "https://vectortiles.geoportail.lu/data/$groupValue.json"
             }
             }!!
@@ -250,7 +274,7 @@ class LuxTileServer(
             val tilesPath = File(this.filePath,"dl/mbtiles")
             val mapName = resourcePath.substringAfterLast("/").replace(".json", "")
             // temporary mapping until files are renamed
-            var tilesName = when (mapName) {
+            val tilesName = when (mapName) {
             "omt-geoportail" -> "tiles_luxembourg"
             "omt-topo-geoportail" -> "topo_tiles_luxembourg"
             "topo" -> "topo_tiles_luxembourg"
@@ -258,9 +282,8 @@ class LuxTileServer(
         }
             if (File(tilesPath, "$tilesName.mbtiles").exists()) {
                 resString = resString.replace(
-                    "https://vectortiles.geoportail.lu/data/${mapName}/\\{z\\}/\\{x\\}/\\{y\\}.(pbf|png)".toRegex(),
-                    {mm -> "http://localhost:8766/mbtiles?layer=${mapName}&z={z}&x={x}&y={y}&format=${mm.groups[1]?.value}"}
-                )
+                    "https://vectortiles.geoportail.lu/data/${mapName}/\\{z\\}/\\{x\\}/\\{y\\}.(pbf|png)".toRegex()
+                ) { mm -> "http://127.0.0.1:8766/mbtiles?layer=${mapName}&z={z}&x={x}&y={y}&format=${mm.groups[1]?.value}" }
             }
         }
         return resString.toByteArray()
@@ -277,26 +300,36 @@ class LuxTileServer(
                 response.headers.add("Cache-Control","no-store")
             }
             try {
-                val file = File("${this.filePath}/dl", resourcePath)
+                val dlDir = File(this.filePath, "dl").canonicalFile
+                val file = File(dlDir, resourcePath).canonicalFile
+                // refuse paths escaping the dl folder (e.g. /../databases/Offline.db)
+                if (!file.path.startsWith(dlDir.path + File.separator)) {
+                    response.code(404)
+                    response.send("")
+                    return@HttpServerRequestCallback
+                }
                 var resourceBytes = FileInputStream(file).use{ it.readBytes()}
                 // file.close()
-                // rewrite URLs in json data, skip binary data such as fonts
+                // rewrite URLs in JSON data, skip binary data such as fonts
                 if (resourcePath.contains(".json")) resourceBytes = replaceUrls(resourceBytes, resourcePath)
 
                 response.headers.add("Content-Length", resourceBytes.size.toString())
                 response.write(ByteBufferList(resourceBytes))
-            } catch (e: IOException) {
-                if (relativePath.contains("style.json")) {
-                    try {
-                        val onlineUrl = URL("https", "vectortiles.geoportail.lu", relativePath)
-                        val conn = onlineUrl.openConnection()
-                        val sourceStream = conn.getInputStream()
-                        val resourceBytes = sourceStream.use{ it.readBytes()}
-                        response.headers.add("Content-Length", resourceBytes.size.toString())
-                        response.write(ByteBufferList(resourceBytes))
-                        return@HttpServerRequestCallback
-                    }
-                    catch (e: java.lang.Exception) {Log.i("javalang", e.toString())}
+            } catch (_: IOException) {
+                // not available offline (e.g. after deleting the offline data): serve the online version,
+                // which is at the same path on vectortiles.geoportail.lu (without the /static prefix)
+                try {
+                    val onlinePath = "/" + relativePath.trimStart('/')
+                    val conn = URL("https", "vectortiles.geoportail.lu", onlinePath).openConnection()
+                    conn.connectTimeout = META_CONNECT_TIMEOUT_MS
+                    conn.readTimeout = META_READ_TIMEOUT_MS
+                    val resourceBytes = conn.getInputStream().use { it.readBytes() }
+                    conn.contentType?.let { response.setContentType(it) }
+                    response.headers.add("Content-Length", resourceBytes.size.toString())
+                    response.write(ByteBufferList(resourceBytes))
+                    return@HttpServerRequestCallback
+                } catch (e: IOException) {
+                    Log.i("getStaticFile", "Not available online either: $relativePath ($e)")
                 }
                 response.code(404)
                 response.send("")
@@ -317,8 +350,7 @@ class LuxTileServer(
             if (!db.containsKey(layer)) {
                 try {
                     db[layer] = openDB(layer)
-                }
-                catch (e: SQLiteCantOpenDatabaseException) {
+                } catch (_: SQLiteCantOpenDatabaseException) {
                     response.code(404)
                     response.send("")
                     return@HttpServerRequestCallback
@@ -359,24 +391,24 @@ class LuxTileServer(
                     response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
                     curs.close()
                     return@HttpServerRequestCallback
-                }
-                catch (e: SQLiteBlobTooBigException) {
-                    val curs = db[layer]?.rawQuery(
-                        "select length(tile_data) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
-                        null
-                    )
-                    curs?.moveToFirst()
+                } catch (_: SQLiteBlobTooBigException) {
+                    curs.close()
                     // query sqlite DB by 1MB chunks because SQLiteCursor is limited to 2MB
                     // in the current DB, this case only occurs for one tile (x=264&y=174&z=9&layer=topo)
-                    val ll = (curs?.getInt(0) ?: 0)
+                    val chunkSize = 1000 * 1000
+                    val ll = db[layer]?.rawQuery(
+                        "select length(tile_data) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
+                        null
+                    )?.use { if (it.moveToFirst()) it.getInt(0) else 0 } ?: 0
                     val buf = ByteArray(ll)
-                    for (i in 0..ll.div(1000*1000)) {
-                        val curs = db[layer]?.rawQuery(
-                            "select substr(tile_data, ${1 + i*1000*1000}, ${(i+1)*1000*1000}) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
+                    for (i in 0..ll.div(chunkSize)) {
+                        // substr() takes (start, length); start is 1-based
+                        db[layer]?.rawQuery(
+                            "select substr(tile_data, ${1 + i * chunkSize}, $chunkSize) from tiles where zoom_level = $z AND tile_column = $x AND tile_row = $y",
                             null
-                        )
-                        curs?.moveToFirst()
-                        curs?.getBlob(0)?.copyInto(buf, i*1000*1000)
+                        )?.use {
+                            if (it.moveToFirst()) it.getBlob(0)?.copyInto(buf, i * chunkSize)
+                        }
                     }
                     if (fileFormat == "png") {
                         response.setContentType("image/png")
@@ -386,7 +418,6 @@ class LuxTileServer(
                         response.headers.add("Content-Encoding", "gzip")
                     }
                     response.sendStream(ByteArrayInputStream(buf), buf.size.toLong())
-                    curs?.close()
                     return@HttpServerRequestCallback
                 }
             }
@@ -395,24 +426,29 @@ class LuxTileServer(
         }
 
     private val checkData =
-        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+        HttpServerRequestCallback { _: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Cache-Control","no-store")
             response.setContentType("application/json")
 
             val json = JSONObject()
 
-            val allMeta: JSONObject?
-            try {
-                allMeta = getAllMeta()
+            val allMeta: JSONObject? = try {
+                getAllMeta()
+            } catch (e: IOException) {
+                // no network, DNS failure, timeout, TLS error, ...
+                Log.i("checkData", "Catalog not reachable: $e")
+                null
+            } catch (e: JSONException) {
+                Log.i("checkData", "Catalog is not valid JSON: $e")
+                null
             }
-            catch (e: UnknownHostException) {
+            if (allMeta == null) {
                 response.code(504)
                 response.send("Online resource catalog not found.\n")
                 return@HttpServerRequestCallback
-
             }
-            for (resName in allMeta!!.keys()) {
+            for (resName in allMeta.keys()) {
                 json.put(resName, JSONObject(mapOf(
                     "status" to getStatus(resName).toString(),
                     "filesize" to getSize(resName),
@@ -425,7 +461,7 @@ class LuxTileServer(
         }
 
     private val checkPreflight =
-        HttpServerRequestCallback { request: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
+        HttpServerRequestCallback { _: AsyncHttpServerRequest, response: AsyncHttpServerResponse ->
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Access-Control-Allow-Methods", "PUT, DELETE")
             response.code(200)
@@ -439,7 +475,7 @@ class LuxTileServer(
             response.headers.add("Access-Control-Allow-Origin", "*")
             response.headers.add("Cache-Control","no-store")
 
-            if (mapName == null) {
+            if (mapName == null || !isSafeName(mapName)) {
                 response.code(404)
                 response.send("Map not found.\n")
                 return@HttpServerRequestCallback
@@ -466,20 +502,31 @@ class LuxTileServer(
                     response.send("Download already in progress - cannot launch simultaneous DL.\n")
                     return@HttpServerRequestCallback
                 }
-                meta = getMeta(mapName!!)!!
-                val scope = CoroutineScope(Dispatchers.IO)
-                val threadLocal = ThreadLocal<LuxTileServer>()
-                val job = scope.launch(threadLocal.asContextElement(this)) {
-                    val response = "bla"
+                if (mapName == null || !isSafeName(mapName)) throw IllegalArgumentException("Invalid map name")
+                meta = getMeta(mapName)!!
+                // a failed download ends the job exceptionally (=> status FAILED); the handler
+                // only logs it, so the exception does not crash the app
+                val handler = CoroutineExceptionHandler { _, e ->
+                    Log.i(
+                        "MetaDL",
+                        "Download of $mapName failed: $e"
+                    )
+                }
+                val scope = CoroutineScope(Dispatchers.IO + handler)
+                val job = scope.launch {
                     try {
-                        val filePath = threadLocal.get()?.filePath
-                        saveMeta(meta, "${filePath}/tmp/versions/$mapName.meta")
-                        downloadAssetsFromMeta(meta, File(filePath, "tmp"))
+                        // inside launch {}, "this" is the CoroutineScope, hence the qualified this
+                        saveMeta(meta, "${this@LuxTileServer.filePath}/tmp/versions/$mapName.meta")
+                        downloadAssetsFromMeta(meta, File(this@LuxTileServer.filePath, "tmp"))
                         // move all data to dl folder
-                        deleteAssets(mapName, File(filePath,"dl"))
-                        moveAssets(meta.getJSONArray("sources"), File(filePath, "tmp"), File(filePath, "dl"))
+                        deleteAssets(mapName, File(this@LuxTileServer.filePath, "dl"))
+                        moveAssets(
+                            meta.getJSONArray("sources"),
+                            File(this@LuxTileServer.filePath, "tmp"),
+                            File(this@LuxTileServer.filePath, "dl")
+                        )
                         // version is saved only if update has been successful (no exception occurred)
-                        saveMeta(meta, "${filePath}/dl/versions/$mapName.meta")
+                        saveMeta(meta, "${this@LuxTileServer.filePath}/dl/versions/$mapName.meta")
                     }
                     catch (e: Exception) {
                         if (e is FileNotFoundException) {
@@ -488,6 +535,8 @@ class LuxTileServer(
                         else if (e is ConnectException) {
                             Log.i("MetaDL","Connection Failed : ${e.message}")
                         }
+                        Log.i("MetaDL", "Terminated with error")
+                        throw e
                     }
                     Log.i("MetaDL", "Terminated")
                 }
@@ -498,8 +547,7 @@ class LuxTileServer(
                 // the used http server seems to be single threaded, at least other requests seem to remain
                 // blocked until this transaction return => might be better to use 202
                 response.code(202)
-            }
-            catch (e: Exception) {
+            } catch (_: Exception) {
                 response.code(404)
             }
 

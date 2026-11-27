@@ -17,6 +17,7 @@
             android:networkSecurityConfig="@xml/network_security_config">
         <activity
                 android:name="lu.geoportail.map.MainActivity"
+                android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
                 android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
